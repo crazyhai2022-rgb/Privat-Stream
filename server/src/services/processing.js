@@ -52,8 +52,10 @@ async function processVideo(job) {
       if (info.duration > max + 0.5) {
         throw new PermanentError(`This ${video.kind === 'short' ? 'Short' : 'long video'} is ${Math.round(info.duration)}s long; the limit is ${max}s.`);
       }
-    } else if (config.isProd) {
-      throw new Error('ffmpeg is not installed on the worker');
+    } else if (config.requireFfmpeg) {
+      throw new Error(
+        'ffmpeg/ffprobe were not found. Install them, point FFMPEG_PATH and FFPROBE_PATH at a '
+        + 'static build, or set REQUIRE_FFMPEG=false to accept uploads without processing.');
     }
 
     let thumbKey = video.thumbnail_key;
@@ -66,6 +68,10 @@ async function processVideo(job) {
 
     let playbackKey = video.original_key;
     let mime = video.mime;
+    if (!ff && !/^video\/(mp4|webm)$/.test(String(mime))) {
+      // Nothing can re-encode it and browsers cannot play the original as-is.
+      throw new PermanentError('This file needs converting before it can play, but video processing is unavailable on this server. Please upload an MP4.');
+    }
     if (ff && config.worker.transcode) {
       const fmt = config.worker.playbackFormat;
       const out = path.join(work, `playback.${fmt}`);

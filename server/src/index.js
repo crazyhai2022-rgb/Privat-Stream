@@ -11,6 +11,19 @@ await migrate({ quiet: true });
 const { ensureDefaultCategories } = await import('./services/bootstrap.js');
 await ensureDefaultCategories();
 
+const { hasFfmpeg } = await import('./lib/media.js');
+if (!(await hasFfmpeg())) {
+  const how = `(looked for "${config.ffmpegPath}" and "${config.ffprobePath}")`;
+  if (config.requireFfmpeg) {
+    console.error(`ffmpeg/ffprobe not found ${how}.`);
+    console.error('Uploads will fail until they are available. Install them, set FFMPEG_PATH and');
+    console.error('FFPROBE_PATH to a static build, or set REQUIRE_FFMPEG=false to run without them.');
+  } else {
+    console.warn(`Running without ffmpeg ${how}: no thumbnails, no duration limit enforcement,`);
+    console.warn('and only MP4/WebM uploads will play. See docs/CPANEL.md.');
+  }
+}
+
 const app = createApp();
 const server = app.listen(config.port, () => {
   console.log(`viralX running on ${config.baseUrl}  (db: ${db.driver}, storage: ${config.storage.driver}, env: ${config.env})`);

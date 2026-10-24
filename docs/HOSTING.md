@@ -10,22 +10,26 @@
 | **Disk or S3 for the video files** | Videos are never stored in the database. |
 | **Permission to run a worker and burn CPU** | Transcoding is CPU-heavy by nature. |
 
-## Shared cPanel / Hostinger shared hosting — will not work
+## Shared cPanel hosting — possible when the plan includes Node.js
 
-This is why the deployment returns **503 Service Unavailable**: the files were
-copied into the web root, but nothing there can run a Node server. Even when a
-cPanel plan offers "Setup Node.js App":
+A plain 503 means the repository was copied into the web root with nothing there able
+to run a Node server. That is fixable **if your plan lists Node.js** (cPanel →
+*Setup Node.js App*). Hostinger's cPanel plans that advertise "NodeJS" do.
 
-- **No PostgreSQL.** Shared cPanel gives MySQL only.
-- **No ffmpeg**, and no way to install it without root.
-- **Long-running workers get killed**, and the CPU/RAM limits on shared plans are
-  far below what transcoding needs. Running it anyway usually gets the account
-  suspended for resource abuse.
+Two gaps remain, and both have answers:
 
-So shared hosting is not a "for now" option that becomes fine later — it cannot run
-this app at any point. Keep cPanel for your WordPress sites and host viralX
-separately; the two can live on different servers under the same domain
-(for example `viralx.yourdomain.com` pointing at the app server).
+- **No PostgreSQL** — cPanel gives MySQL only. Use a free managed PostgreSQL
+  (Neon or Supabase) and paste the connection string; nothing else changes.
+- **No ffmpeg** — install a static build into your home directory with
+  `deploy/install-ffmpeg-static.sh`, no root needed. If the host blocks that,
+  `REQUIRE_FFMPEG=false` keeps the site working with real trade-offs.
+
+Also, Passenger stops the app when it is idle, so the background worker runs from a
+cron job instead. Step-by-step: [`CPANEL.md`](CPANEL.md).
+
+**What you give up on shared hosting:** CPU and memory caps make transcoding slow,
+and heavy use can get the account flagged. It is a good place to test and launch, not
+where a busy platform ends up. Plans *without* Node.js cannot run viralX at all.
 
 ## Options that do work
 
@@ -35,6 +39,7 @@ separately; the two can live on different servers under the same domain
 | **Render** | Free tier, or ~$7/month | Quick testing | `render.yaml` in this repo is a one-click blueprint. The free plan sleeps when idle and has **no persistent disk**, so set up S3 storage before testing real uploads. |
 | **Railway** | ~$5/month after the trial | Easiest setup | Detects the Dockerfile, Postgres is one click, volumes available. |
 | **Fly.io** | Pay as you go | Multiple regions | Docker-native, Postgres available. |
+| **cPanel shared hosting with Node.js** | What you may already pay for | Testing and launching | Needs an external PostgreSQL and a cron worker — see [`CPANEL.md`](CPANEL.md). |
 
 ### Fastest path: a VPS
 

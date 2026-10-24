@@ -8,6 +8,7 @@
     "dev": "node --watch src/index.js",
     "migrate": "node src/db/migrate.js",
     "seed": "node src/db/seed.js",
+    "worker:once": "node src/scripts/process-jobs.js",
     "create-admin": "node src/scripts/create-admin.js",
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\""
   },

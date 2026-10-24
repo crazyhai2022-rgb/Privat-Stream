@@ -62,6 +62,14 @@ export const config = {
     secure: bool(env.SMTP_SECURE, false),
   },
 
+  // ffmpeg/ffprobe locations. On shared hosting without root you can drop static builds in
+  // your home directory and point these at them (see deploy/install-ffmpeg-static.sh).
+  ffmpegPath: env.FFMPEG_PATH || 'ffmpeg',
+  ffprobePath: env.FFPROBE_PATH || 'ffprobe',
+  // Set to false only when ffmpeg genuinely cannot be installed. See docs/CPANEL.md for
+  // exactly what stops working.
+  requireFfmpeg: bool(env.REQUIRE_FFMPEG, true),
+
   worker: {
     inline: bool(env.RUN_WORKER, true), // run the processing worker inside the API process
     transcode: bool(env.TRANSCODE, true),

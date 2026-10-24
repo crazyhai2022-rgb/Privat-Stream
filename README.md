@@ -166,8 +166,9 @@ server/
 web/
   index.html, css/, js/  public site (no build step)
   admin/                 Super Admin panel
-docs/                    hosting, API reference, trending, deployment
-deploy/vps-setup.sh      one-command setup for a fresh Ubuntu VPS
+docs/                    hosting, cPanel, API reference, trending, deployment
+deploy/                  VPS setup and static-ffmpeg install scripts
+server/app.cjs           startup file for cPanel's Node.js app (Passenger)
 render.yaml              one-click Render blueprint
 ```
 
@@ -204,9 +205,11 @@ traversal, and security headers. They run against an in-memory database and need
 
 ## 7. Deployment
 
-> **Shared hosting will not work.** viralX needs a long-running Node process, PostgreSQL and
-> ffmpeg, so shared cPanel plans (Hostinger shared, GoDaddy, Bluehost…) cannot run it — they
-> return 503. [`docs/HOSTING.md`](docs/HOSTING.md) explains the options; the two quickest are:
+> viralX needs a long-running Node process, PostgreSQL and ffmpeg. Plain static/PHP hosting
+> returns 503 because nothing there can run the server. **Shared cPanel hosting works when the
+> plan includes Node.js** — see [`docs/CPANEL.md`](docs/CPANEL.md), which covers the external
+> database and the cron worker it needs. [`docs/HOSTING.md`](docs/HOSTING.md) compares all the
+> options; the two quickest are:
 >
 > ```bash
 > # Any Ubuntu VPS (Hostinger VPS, DigitalOcean, Contabo…), as root:

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import fsp from 'node:fs/promises';
+import { config } from '../config.js';
 
 function run(cmd, args, { timeoutMs = 20 * 60 * 1000 } = {}) {
   return new Promise((resolve, reject) => {
@@ -17,15 +18,22 @@ function run(cmd, args, { timeoutMs = 20 * 60 * 1000 } = {}) {
   });
 }
 
+const FFMPEG = () => config.ffmpegPath;
+const FFPROBE = () => config.ffprobePath;
+
 let ffAvailable;
 export async function hasFfmpeg() {
   if (ffAvailable !== undefined) return ffAvailable;
-  try { await run('ffprobe', ['-version'], { timeoutMs: 5000 }); await run('ffmpeg', ['-version'], { timeoutMs: 5000 }); ffAvailable = true; } catch { ffAvailable = false; }
+  try {
+    await run(FFPROBE(), ['-version'], { timeoutMs: 8000 });
+    await run(FFMPEG(), ['-version'], { timeoutMs: 8000 });
+    ffAvailable = true;
+  } catch { ffAvailable = false; }
   return ffAvailable;
 }
 
 export async function probe(file) {
-  const { out } = await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file], { timeoutMs: 60000 });
+  const { out } = await run(FFPROBE(), ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file], { timeoutMs: 60000 });
   const j = JSON.parse(out);
   const v = (j.streams || []).find((s) => s.codec_type === 'video');
   if (!v) throw new Error('File does not contain a video stream');
@@ -41,7 +49,7 @@ export async function makeThumbnail(src, dest, { kind, at = 1 }) {
   const vf = kind === 'short'
     ? 'scale=360:640:force_original_aspect_ratio=increase,crop=360:640'
     : 'scale=640:360:force_original_aspect_ratio=increase,crop=640:360';
-  await run('ffmpeg', ['-y', '-v', 'error', '-ss', String(at), '-i', src, '-frames:v', '1', '-vf', vf, '-q:v', '4', dest], { timeoutMs: 120000 });
+  await run(FFMPEG(), ['-y', '-v', 'error', '-ss', String(at), '-i', src, '-frames:v', '1', '-vf', vf, '-q:v', '4', dest], { timeoutMs: 120000 });
 }
 
 export async function transcode(src, dest, { hasAudio, format = 'mp4' }) {
@@ -55,7 +63,7 @@ export async function transcode(src, dest, { hasAudio, format = 'mp4' }) {
     if (hasAudio) args.push('-c:a', 'aac', '-b:a', '128k'); else args.push('-an');
   }
   args.push(dest);
-  await run('ffmpeg', args);
+  await run(FFMPEG(), args);
 }
 
 // Re-encode an uploaded image to a safe, metadata-free JPEG at a bounded size.
@@ -63,7 +71,7 @@ export async function processImage(src, dest, { width, height, crop }) {
   const vf = crop
     ? `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`
     : `scale='min(${width},iw)':-2`;
-  await run('ffmpeg', ['-y', '-v', 'error', '-i', src, '-frames:v', '1', '-vf', vf, '-map_metadata', '-1', '-q:v', '3', dest], { timeoutMs: 60000 });
+  await run(FFMPEG(), ['-y', '-v', 'error', '-i', src, '-frames:v', '1', '-vf', vf, '-map_metadata', '-1', '-q:v', '3', dest], { timeoutMs: 60000 });
 }
 
 // ---- Magic-byte sniffing: never trust file extensions or client-supplied MIME types ----
