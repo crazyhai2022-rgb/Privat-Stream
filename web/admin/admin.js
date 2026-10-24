@@ -1,5 +1,5 @@
 // Super Admin panel: separate login (admin session cookie), role-aware navigation, real data only.
-import { h, icon, logoMark, brandWordmark, toast, confirmDialog, openModal, fmtCount, fmtDateTime, timeAgo, statusPill, statusLabel, fmtDur, qs, initials } from '../js/util.js';
+import { h, icon, brandWordmark, toast, confirmDialog, openModal, fmtCount, fmtDateTime, timeAgo, statusPill, statusLabel, fmtDur, qs, initials } from '../js/util.js';
 import { api, state, ApiError } from '../js/api.js';
 
 const app = document.getElementById('app');
@@ -54,7 +54,7 @@ function loginView() {
   const msg = h('div', { class: 'err', hidden: true });
   const btn = h('button', { class: 'btn primary', type: 'submit', style: 'width:100%;height:42px' }, 'Log in');
   app.replaceChildren(h('div', { class: 'adm-login' },
-    h('div', { class: 'brand', style: 'justify-content:center;margin-bottom:6px' }, logoMark(), brandWordmark(BRAND())),
+    h('div', { class: 'brand', style: 'justify-content:center;margin-bottom:6px;font-size:28px' }, brandWordmark(BRAND())),
     h('p', { class: 'muted', style: 'text-align:center;margin-bottom:18px' }, 'Administration'),
     h('form', { class: 'card', onsubmit: async (e) => {
       e.preventDefault(); msg.hidden = true; btn.disabled = true;
@@ -75,7 +75,7 @@ function shell() {
   const nav = h('nav', null, PAGES.filter(([, , , p]) => can(p)).map(([key, label, ic]) =>
     h('a', { href: `#/${key}`, dataset: { key } }, icon(ic), label, h('span', { class: 'count', dataset: { badge: key }, hidden: true }))));
   sideEl = h('aside', { class: 'adm-side' },
-    h('div', { class: 'brand' }, logoMark(), brandWordmark(BRAND())), h('div', { class: 'tagline' }, 'Super Admin'), nav,
+    h('div', { class: 'brand' }, brandWordmark(BRAND())), h('div', { class: 'tagline' }, 'Super Admin'), nav,
     h('div', { style: 'margin-top:14px;padding:0 10px' }, h('a', { href: '/', target: '_blank', rel: 'noopener', class: 'muted small' }, 'Open public site ↗')));
   titleEl = h('h1', { style: 'font-size:18px' }, 'Dashboard');
   bodyEl = h('div', { class: 'adm-body' });

@@ -1,4 +1,4 @@
-import { h, icon, logoMark, brandWordmark, $, $$, clear, setTitle } from './util.js';
+import { h, icon, brandWordmark, $, $$, clear, setTitle } from './util.js';
 import { state, loadConfig, refreshMe, onAuthChange, logout } from './api.js';
 import { route, setHooks, startRouter, navigate } from './router.js';
 import { avatarEl } from './cards.js';
@@ -68,7 +68,7 @@ function openDrawer() {
   closeDrawer();
   const scrim = h('div', { class: 'scrim', onclick: closeDrawer });
   drawer = h('aside', { class: 'drawer nav', 'aria-label': 'Menu' },
-    h('a', { class: 'brand', href: '/' }, logoMark(), brandWordmark(window.__brand)), ...navLinks(),
+    h('a', { class: 'brand', href: '/' }, brandWordmark(window.__brand)), ...navLinks(),
     h('hr'),
     state.user ? h('a', { href: '#', onclick: async (e) => { e.preventDefault(); closeDrawer(); await logout(); navigate('/'); } }, icon('logout'), 'Log out')
       : [h('a', { href: '/login' }, icon('user'), 'Log in'), h('a', { href: '/register' }, icon('user'), 'Create account')]);
@@ -106,7 +106,7 @@ function buildChrome() {
     searchInput, h('button', { type: 'submit', 'aria-label': 'Search' }, icon('search')));
   clear(topbar).append(
     h('button', { class: 'icon-btn only-m', 'aria-label': 'Open menu', onclick: openDrawer }, icon('menu')),
-    h('a', { class: 'brand', href: '/', 'aria-label': `${window.__brand} home` }, logoMark(), brandWordmark(window.__brand, 'name')),
+    h('a', { class: 'brand', href: '/', 'aria-label': `${window.__brand} home` }, brandWordmark(window.__brand, 'name')),
     h('div', { class: 'mtabs' }, h('a', { href: '/' }, 'Home'), h('a', { href: '/shorts' }, 'Shorts')),
     form,
     h('div', { class: 'top-actions' }, h('a', { class: 'icon-btn only-m', href: '/search', 'aria-label': 'Search' }, icon('search')), ...userArea()));
