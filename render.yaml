@@ -1,0 +1,64 @@
+# One-click deploy on Render: New → Blueprint → pick this repository.
+# Render reads this file, builds the Dockerfile (which already includes ffmpeg)
+# and creates the PostgreSQL database.
+#
+# After the first deploy:
+#   1. Open the service Shell and create your admin:
+#        cd /app/server && node src/scripts/create-admin.js --email you@example.com --name "Your Name" --generate
+#   2. For real uploads, set STORAGE_DRIVER=s3 and the S3_* variables (see docs/HOSTING.md).
+#      Without them, files live on the container disk and disappear on every restart.
+#   3. Set the SMTP_* variables so verification emails actually send.
+
+services:
+  - type: web
+    name: viralx
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter          # "free" also works for a quick test; it sleeps when idle
+    region: singapore      # closest Render region to India
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # 32+ random characters, generated once by Render and kept across deploys.
+      - key: APP_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: viralx-db
+          property: connectionString
+      - key: DATABASE_SSL
+        value: "true"
+      # BASE_URL is detected from Render's own RENDER_EXTERNAL_URL, so the first
+      # deploy works. Set it explicitly once you attach a custom domain.
+      - key: PLAYBACK_FORMAT
+        value: mp4
+      # Fill these in from the Render dashboard (they are not stored in the repo).
+      - key: STORAGE_DRIVER
+        value: local
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+
+databases:
+  - name: viralx-db
+    plan: basic-256mb      # "free" works for testing; it expires after 30 days
+    region: singapore

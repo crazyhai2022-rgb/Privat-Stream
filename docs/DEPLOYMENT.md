@@ -101,40 +101,21 @@ server {
 
 ## 6. Docker
 
-```dockerfile
-FROM node:22-bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
- && rm -rf /var/lib/apt/lists/*
-WORKDIR /app
-COPY server/package*.json ./server/
-RUN cd server && npm ci --omit=dev
-COPY . .
-ENV NODE_ENV=production PORT=4000
-EXPOSE 4000
-WORKDIR /app/server
-CMD ["node", "src/index.js"]
+The repository already contains a production `Dockerfile` (multi-stage, ffmpeg included,
+runs as a non-root user) and a `docker-compose.yml`. You do not need to write your own:
+
+```bash
+docker compose up -d --build
 ```
 
-```yaml
-# docker-compose.yml
-services:
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_PASSWORD: change-me
-      POSTGRES_DB: viralx
-    volumes: [pgdata:/var/lib/postgresql/data]
-  app:
-    build: .
-    env_file: server/.env
-    environment:
-      DATABASE_URL: postgres://postgres:change-me@db:5432/viralx
-    ports: ["4000:4000"]
-    depends_on: [db]
-volumes: { pgdata: }
-```
 
-With `STORAGE_DRIVER=local`, mount a volume at `/app/server/storage-data` so files survive restarts.
+The compose file starts PostgreSQL alongside the app and keeps uploaded media in a named
+volume, so files survive restarts. Set `POSTGRES_PASSWORD` in a `.env` next to it and the
+app's own settings in `server/.env`.
+
+
+For a hands-off install on a fresh Ubuntu server, `deploy/vps-setup.sh` does all of this for
+you — see [`HOSTING.md`](HOSTING.md).
 
 ## 7. Separating the worker
 

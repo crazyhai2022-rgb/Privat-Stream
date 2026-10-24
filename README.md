@@ -166,7 +166,9 @@ server/
 web/
   index.html, css/, js/  public site (no build step)
   admin/                 Super Admin panel
-docs/                    API reference, trending, deployment
+docs/                    hosting, API reference, trending, deployment
+deploy/vps-setup.sh      one-command setup for a fresh Ubuntu VPS
+render.yaml              one-click Render blueprint
 ```
 
 No bundler is involved: the front-end is native ES modules served as static files.
@@ -201,6 +203,18 @@ traversal, and security headers. They run against an in-memory database and need
 ---
 
 ## 7. Deployment
+
+> **Shared hosting will not work.** viralX needs a long-running Node process, PostgreSQL and
+> ffmpeg, so shared cPanel plans (Hostinger shared, GoDaddy, Bluehost…) cannot run it — they
+> return 503. [`docs/HOSTING.md`](docs/HOSTING.md) explains the options; the two quickest are:
+>
+> ```bash
+> # Any Ubuntu VPS (Hostinger VPS, DigitalOcean, Contabo…), as root:
+> bash <(curl -fsSL https://raw.githubusercontent.com/crazyhai2022-rgb/Privat-Stream/main/deploy/vps-setup.sh)
+> ```
+>
+> On **Render**, use *New → Blueprint* and pick this repo — `render.yaml` sets up the app and
+> its database for you.
 
 Full instructions, including nginx, systemd, Docker and a production checklist, are in
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). The short version:

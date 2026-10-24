@@ -17,9 +17,14 @@ export const config = {
   isProd: nodeEnv === 'production',
   isTest: nodeEnv === 'test',
   port,
-  baseUrl: (env.BASE_URL || `http://localhost:${port}`).replace(/\/$/, ''),
+  // Hosts that inject their own public URL (Render, Railway) are picked up automatically,
+  // so a first deploy works before BASE_URL is set by hand.
+  baseUrl: (env.BASE_URL
+    || env.RENDER_EXTERNAL_URL
+    || (env.RAILWAY_PUBLIC_DOMAIN ? `https://${env.RAILWAY_PUBLIC_DOMAIN}` : '')
+    || `http://localhost:${port}`).replace(/\/$/, ''),
   extraOrigins: (env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
-  trustProxy: bool(env.TRUST_PROXY, false),
+  trustProxy: bool(env.TRUST_PROXY, !!(env.RENDER || env.RAILWAY_PUBLIC_DOMAIN || env.FLY_APP_NAME)),
 
   // Database: DATABASE_URL (PostgreSQL) in production. Without it, development falls back to an
   // embedded PostgreSQL (PGlite) stored on disk, so `npm start` works with zero setup.
