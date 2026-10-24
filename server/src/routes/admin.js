@@ -24,6 +24,51 @@ const note = z.string().trim().max(1000).optional().default('');
 const reasonRequired = z.string().trim().min(3, 'A reason is required').max(1000);
 const like = (s) => `%${String(s).replace(/[%_\\]/g, (m) => '\\' + m)}%`;
 
+// ---------------- First-administrator bootstrap ----------------
+// Available only while no Super Admin exists AND ADMIN_BOOTSTRAP_TOKEN is set, so it closes
+// itself the moment it has been used. For hosts without a shell; prefer `npm run create-admin`.
+r.post('/bootstrap', limiter({ windowMs: 15 * 60e3, max: 5, message: 'Too many attempts.' }), wrap(async (req, res) => {
+  const { config } = await import('../config.js');
+  const token = config.adminBootstrapToken;
+  const notFoundErr = notFound('Not found');
+  if (!token || token.length < 24) throw notFoundErr;
+  const { n } = await db.one(`select count(*)::int as n from users where role = 'super_admin'`);
+  if (n > 0) throw notFoundErr; // already bootstrapped: behave as if the route does not exist
+
+  const body = z.object({
+    token: z.string().max(200),
+    email: z.string().trim().toLowerCase().email().max(254),
+    full_name: z.string().trim().min(2).max(80),
+    password: z.string().min(12, 'Use at least 12 characters').max(128)
+      .refine((p) => /[A-Za-z]/.test(p) && /[0-9]/.test(p), 'Use letters and numbers'),
+  }).parse(req.body);
+
+  const { safeEqual } = await import('../lib/crypto.js');
+  if (!safeEqual(body.token, token)) {
+    await audit(req, 'admin.bootstrap_denied', 'user', null, {}, null);
+    throw notFoundErr;
+  }
+
+  const { hashPassword } = await import('../lib/password.js');
+  const existing = await db.one('select id from users where lower(email) = $1', [body.email]);
+  let id;
+  if (existing) {
+    await db.query(`update users set role = 'super_admin', full_name = $2, password_hash = $3,
+                      email_verified_at = coalesce(email_verified_at, now()), account_status = 'active',
+                      failed_logins = 0, locked_until = null, updated_at = now() where id = $1`,
+      [existing.id, body.full_name, await hashPassword(body.password)]);
+    id = existing.id;
+  } else {
+    const u = await db.one(
+      `insert into users (email, full_name, password_hash, role, email_verified_at)
+       values ($1,$2,$3,'super_admin', now()) returning id`,
+      [body.email, body.full_name, await hashPassword(body.password)]);
+    id = u.id;
+  }
+  await audit(req, 'admin.bootstrap', 'user', id, { email: body.email, promoted: !!existing }, id);
+  res.status(201).json({ ok: true, message: 'Super Admin created. Remove ADMIN_BOOTSTRAP_TOKEN and restart, then log in.' });
+}));
+
 // ---------------- Admin authentication (separate session scope + cookie) ----------------
 r.post('/auth/login', limiter({ windowMs: 15 * 60e3, max: 10, message: 'Too many admin login attempts.' }), wrap(async (req, res) => {
   const body = z.object({ email: z.string().trim().toLowerCase().email().max(254), password: z.string().min(1).max(128) }).parse(req.body);

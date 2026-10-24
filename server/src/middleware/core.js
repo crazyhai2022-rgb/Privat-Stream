@@ -74,10 +74,17 @@ export function csrfGuard(req, res, next) {
 }
 
 export const requireAuth = (req, res, next) => (req.user ? next() : next(unauthorized()));
-export const requireVerified = (req, res, next) => {
-  if (!req.user) return next(unauthorized());
-  if (!req.user.email_verified_at) return next(forbidden('Please verify your email address first', 'email_unverified'));
-  next();
+
+/** Requires a logged-in user, and a verified email only while the platform asks for one. */
+export const requireVerified = async (req, res, next) => {
+  try {
+    if (!req.user) return next(unauthorized());
+    if (req.user.email_verified_at) return next();
+    const { getSetting } = await import('../services/settings.js');
+    const { require_email_verification: needed } = await getSetting('moderation');
+    if (needed) return next(forbidden('Please verify your email address first', 'email_unverified'));
+    next();
+  } catch (e) { next(e); }
 };
 
 export function requireAdmin(permission) {

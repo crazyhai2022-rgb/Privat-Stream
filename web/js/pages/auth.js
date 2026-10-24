@@ -1,9 +1,10 @@
-import { h, setTitle, toast } from '../util.js';
+import { h, setTitle, toast, passwordInput } from '../util.js';
 import { api, applyMe, state } from '../api.js';
 import { navigate } from '../router.js';
 
-function field(label, input, hint) {
-  return h('div', { class: 'field' }, h('label', { for: input.id }, label), input, hint ? h('div', { class: 'hint' }, hint) : null);
+function field(label, el, hint) {
+  const target = el.input || el; // password boxes are wrapped with their show/hide control
+  return h('div', { class: 'field' }, h('label', { for: target.id }, label), el, hint ? h('div', { class: 'hint' }, hint) : null);
 }
 const nextUrl = (query) => {
   const n = query.get('next') || '/';
@@ -29,9 +30,10 @@ export function login({ root, query }) {
   setTitle('Log in');
   if (state.user) { navigate(nextUrl(query), { replace: true }); return; }
   const email = h('input', { class: 'input', id: 'email', type: 'email', autocomplete: 'email', required: true, maxlength: 254 });
-  const pw = h('input', { class: 'input', id: 'pw', type: 'password', autocomplete: 'current-password', required: true, maxlength: 128 });
+  const pwWrap = passwordInput({ id: 'pw', autocomplete: 'current-password', required: true, maxlength: 128 });
+  const pw = pwWrap.input;
   formPage(root, {
-    title: 'Log in', fields: [field('Email', email), field('Password', pw)], submitText: 'Log in',
+    title: 'Log in', fields: [field('Email', email), field('Password', pwWrap)], submitText: 'Log in',
     footer: [h('a', { href: '/forgot-password', style: 'text-decoration:underline' }, 'Forgot password?'), ' · ', h('a', { href: `/register${location.search}`, style: 'text-decoration:underline' }, 'Create an account')],
     onSubmit: async ({ error }) => {
       if (!email.value || !pw.value) return error('Enter your email and password');
@@ -46,11 +48,12 @@ export function register({ root, query }) {
   if (state.user) { navigate('/', { replace: true }); return; }
   const name = h('input', { class: 'input', id: 'name', autocomplete: 'name', required: true, maxlength: 80 });
   const email = h('input', { class: 'input', id: 'email', type: 'email', autocomplete: 'email', required: true, maxlength: 254 });
-  const pw = h('input', { class: 'input', id: 'pw', type: 'password', autocomplete: 'new-password', required: true, maxlength: 128 });
-  const pw2 = h('input', { class: 'input', id: 'pw2', type: 'password', autocomplete: 'new-password', required: true, maxlength: 128 });
+  const pwWrap = passwordInput({ id: 'pw', autocomplete: 'new-password', required: true, maxlength: 128 });
+  const pw2Wrap = passwordInput({ id: 'pw2', autocomplete: 'new-password', required: true, maxlength: 128 });
+  const pw = pwWrap.input, pw2 = pw2Wrap.input;
   formPage(root, {
     title: 'Create your account', intro: 'Free to watch. An account lets you save videos, comment and become a creator.',
-    fields: [field('Full name', name), field('Email', email), field('Password', pw, 'At least 10 characters with letters and numbers'), field('Confirm password', pw2)],
+    fields: [field('Full name', name), field('Email', email), field('Password', pwWrap, 'At least 10 characters with letters and numbers'), field('Confirm password', pw2Wrap)],
     submitText: 'Create account',
     footer: ['Already have an account? ', h('a', { href: `/login${location.search}`, style: 'text-decoration:underline' }, 'Log in')],
     onSubmit: async ({ error }) => {
@@ -88,10 +91,11 @@ export function forgot({ root }) {
 export function reset({ root, query }) {
   setTitle('Choose a new password');
   const token = query.get('token') || '';
-  const pw = h('input', { class: 'input', id: 'pw', type: 'password', autocomplete: 'new-password', required: true, maxlength: 128 });
-  const pw2 = h('input', { class: 'input', id: 'pw2', type: 'password', autocomplete: 'new-password', required: true, maxlength: 128 });
+  const pwWrap = passwordInput({ id: 'pw', autocomplete: 'new-password', required: true, maxlength: 128 });
+  const pw2Wrap = passwordInput({ id: 'pw2', autocomplete: 'new-password', required: true, maxlength: 128 });
+  const pw = pwWrap.input, pw2 = pw2Wrap.input;
   formPage(root, {
-    title: 'Choose a new password', fields: [field('New password', pw, 'At least 10 characters with letters and numbers'), field('Confirm password', pw2)], submitText: 'Update password',
+    title: 'Choose a new password', fields: [field('New password', pwWrap, 'At least 10 characters with letters and numbers'), field('Confirm password', pw2Wrap)], submitText: 'Update password',
     onSubmit: async ({ error }) => {
       if (pw.value !== pw2.value) return error('Passwords do not match');
       await api.post('/api/auth/reset-password', { token, password: pw.value });

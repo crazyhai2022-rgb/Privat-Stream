@@ -21,6 +21,7 @@
     "cookie-parser": "^1.4.7",
     "express": "^4.22.3",
     "express-rate-limit": "^8.7.1",
+    "hash-wasm": "^4.12.0",
     "helmet": "^8.3.0",
     "multer": "^2.5.0",
     "nanoid": "^6.0.2",
@@ -31,6 +32,6 @@
   "engines": {
     "node": ">=20"
   },
-  "description": "viralX \u2014 Shorts-first video streaming platform (API, worker and static front-end)",
+  "description": "viralX — Shorts-first video streaming platform (API, worker and static front-end)",
   "license": "UNLICENSED"
 }

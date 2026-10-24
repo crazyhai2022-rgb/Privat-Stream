@@ -31,6 +31,9 @@ export const config = {
   databaseUrl: env.DATABASE_URL || '',
   pgliteDir: env.PGLITE_DIR || path.join(SERVER_ROOT, '.data', 'pglite'),
   dbSsl: bool(env.DATABASE_SSL, false),
+  // Allows the embedded database (PGlite) in production. Only sensible on a single small
+  // server: it is one process at a time and cannot be backed up with pg_dump.
+  allowEmbeddedDb: bool(env.ALLOW_EMBEDDED_DB, false),
 
   session: {
     userTtlDays: num(env.SESSION_TTL_DAYS, 30),
@@ -38,6 +41,10 @@ export const config = {
     cookieSecure: bool(env.COOKIE_SECURE, nodeEnv === 'production'),
   },
   secret: env.APP_SECRET || '', // used to HMAC anonymous identifiers & IP hashes
+  // One-time token that allows creating the FIRST Super Admin over HTTP, for servers where
+  // you cannot run a command (no SSH, or an embedded database already held by the app).
+  // The endpoint disappears as soon as a Super Admin exists. Remove the variable afterwards.
+  adminBootstrapToken: env.ADMIN_BOOTSTRAP_TOKEN || '',
 
   storage: {
     driver: env.STORAGE_DRIVER || 'local', // local | s3
@@ -59,6 +66,9 @@ export const config = {
     user: env.SMTP_USER || '',
     pass: env.SMTP_PASS || '',
     from: env.MAIL_FROM || 'viralX <no-reply@localhost>',
+    // 'smtp' sends for real; 'log' writes the link to the server log instead, so sign-up keeps
+    // working before SMTP exists. The link is never exposed over HTTP.
+    transport: env.MAIL_TRANSPORT === 'log' ? 'log' : 'smtp',
     secure: bool(env.SMTP_SECURE, false),
   },
 
@@ -79,15 +89,22 @@ export const config = {
   },
 
   rateLimitDisabled: bool(env.RATE_LIMIT_DISABLED, false),
-  // Dev-only convenience: expose queued emails (verification / reset links) over an API.
-  exposeOutbox: bool(env.EXPOSE_EMAIL_OUTBOX, nodeEnv !== 'production'),
+  // Local-development convenience: serve queued emails (verification and password-reset
+  // links) over HTTP. It is OFF unless switched on explicitly, because anyone who can reach
+  // it can take over any account. Never enable it on a reachable server.
+  exposeOutbox: bool(env.EXPOSE_EMAIL_OUTBOX, false),
 };
 
 if (config.isProd) {
   const problems = [];
   if (!config.secret || config.secret.length < 32) problems.push('APP_SECRET must be set (32+ random characters)');
-  if (!config.databaseUrl) problems.push('DATABASE_URL must be set in production');
+  if (!config.databaseUrl && !config.allowEmbeddedDb) {
+    problems.push('DATABASE_URL must be set in production (or set ALLOW_EMBEDDED_DB=true to keep using the embedded database)');
+  }
   if (config.exposeOutbox) problems.push('EXPOSE_EMAIL_OUTBOX must be false in production');
+  if (!config.smtp.host && config.smtp.transport !== 'log') {
+    problems.push('SMTP_HOST must be set in production (or set MAIL_TRANSPORT=log to write verification links to the server log while you set email up)');
+  }
   if (problems.length) {
     console.error('Refusing to start in production:\n - ' + problems.join('\n - '));
     process.exit(1);

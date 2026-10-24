@@ -133,7 +133,7 @@ export function commentsPanel(video, { onCount } = {}) {
     composer = h('div', { class: 'muted small' }, 'Comments are turned off.');
   } else if (!state.user) {
     composer = h('div', { class: 'notice small' }, h('a', { href: `/login?next=${encodeURIComponent(location.pathname)}`, style: 'text-decoration:underline' }, 'Log in'), ' to join the conversation.');
-  } else if (!state.user.email_verified) {
+  } else if (state.config?.email_verification_required && !state.user.email_verified) {
     composer = h('div', { class: 'notice small' }, 'Verify your email address to comment.');
   } else {
     const ta = h('textarea', { class: 'textarea', maxlength: 1000, placeholder: 'Add a comment…', 'aria-label': 'Add a comment' });

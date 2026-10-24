@@ -39,10 +39,13 @@ async function sendVerification(user) {
 
 export async function meSummary(req) {
   const channel = await db.one('select * from channels where user_id = $1', [req.user.id]);
+  const { getSetting } = await import('../services/settings.js');
+  const { require_email_verification: requireEmailVerification } = await getSetting('moderation');
   return {
     user: userDto(req.user),
     channel: channelDto(channel),
-    can_upload: canUpload(req.user, channel),
+    can_upload: canUpload(req.user, channel, { requireEmailVerification }),
+    email_verification_required: requireEmailVerification,
     csrf_token: req.session?.csrf_token,
   };
 }

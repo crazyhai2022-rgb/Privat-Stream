@@ -88,20 +88,32 @@ describe('engagement metrics stay separate', () => {
     assert.equal((await anon.post(`/api/videos/${id}/share`)).body.counted, false);
   });
 
-  test('saving and commenting require a logged-in, verified account', async () => {
+  test('saving and commenting require a logged-in account', async () => {
     const { id } = await publishedVideo();
     const anon = client();
     assert.equal((await anon.put(`/api/videos/${id}/save`)).status, 401);
     assert.equal((await anon.post(`/api/videos/${id}/comments`, { body: 'hi' })).status, 401);
 
-    const unverified = await makeUser({ verify: false });
-    const c = await unverified.client.post(`/api/videos/${id}/comments`, { body: 'hi' });
-    assert.equal(c.status, 403);
-    assert.equal(c.body.error.code, 'email_unverified');
-
     const user = await makeUser();
     assert.equal((await user.client.put(`/api/videos/${id}/save`)).status, 200);
     assert.equal((await user.client.post(`/api/videos/${id}/comments`, { body: 'hi' })).status, 201);
+  });
+
+  test('commenting asks for a verified email only when the platform requires one', async () => {
+    const { id } = await publishedVideo();
+    const { setSetting } = await import('../src/services/settings.js');
+    const base = { require_video_moderation: true, comments_enabled: true };
+    const unverified = await makeUser({ verify: false });
+
+    await setSetting('moderation', { ...base, require_email_verification: false });
+    assert.equal((await unverified.client.post(`/api/videos/${id}/comments`, { body: 'hello' })).status, 201);
+
+    await setSetting('moderation', { ...base, require_email_verification: true });
+    const blocked = await unverified.client.post(`/api/videos/${id}/comments`, { body: 'again' });
+    assert.equal(blocked.status, 403);
+    assert.equal(blocked.body.error.code, 'email_unverified');
+
+    await setSetting('moderation', { ...base, require_email_verification: false });
   });
 
   test('saved videos are persisted and can be removed', async () => {

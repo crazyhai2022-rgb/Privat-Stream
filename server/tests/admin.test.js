@@ -295,3 +295,58 @@ describe('settings, telegram and audit', () => {
     }
   });
 });
+
+describe('first-administrator bootstrap', () => {
+  const TOKEN = 'bootstrap-token-at-least-24-chars-long';
+
+  test('it is invisible without a token, with a wrong token, and once an admin exists', async () => {
+    const { config } = await import('../src/config.js');
+    const anon = client();
+    const payload = { token: TOKEN, email: 'first@example.test', full_name: 'First Admin', password: 'BootstrapPass123' };
+
+    // No token configured -> the route behaves as if it does not exist.
+    config.adminBootstrapToken = '';
+    assert.equal((await anon.post('/api/admin/bootstrap', payload)).status, 404);
+
+    // A short token is refused outright (it would be guessable).
+    config.adminBootstrapToken = 'short';
+    assert.equal((await anon.post('/api/admin/bootstrap', payload)).status, 404);
+
+    config.adminBootstrapToken = TOKEN;
+    // Wrong token -> same 404, so nothing is revealed.
+    assert.equal((await anon.post('/api/admin/bootstrap', { ...payload, token: 'wrong-token-wrong-token-wrong' })).status, 404);
+
+    // Any existing Super Admin closes it, even with the right token.
+    await makeAdmin();
+    assert.equal((await anon.post('/api/admin/bootstrap', payload)).status, 404);
+    config.adminBootstrapToken = '';
+  });
+
+  test('with no Super Admin it creates one that can log in, and then closes itself', async () => {
+    const { config } = await import('../src/config.js');
+    const { db: database } = await import('../src/db/index.js');
+    // Start from a store with no Super Admin.
+    await database.query(`update users set role = 'user' where role = 'super_admin'`);
+    config.adminBootstrapToken = TOKEN;
+
+    const anon = client();
+    const email = `boot${Date.now()}@example.test`;
+    const password = 'BootstrapPass123';
+    const weak = await anon.post('/api/admin/bootstrap', { token: TOKEN, email, full_name: 'Boot Admin', password: 'short1' });
+    assert.equal(weak.status, 400, 'a weak password is refused');
+
+    const created = await anon.post('/api/admin/bootstrap', { token: TOKEN, email, full_name: 'Boot Admin', password });
+    assert.equal(created.status, 201);
+
+    const login = await anon.post('/api/admin/auth/login', { email, password });
+    assert.equal(login.status, 200);
+    assert.equal(login.body.admin.role, 'super_admin');
+
+    // Used once: a second call is gone even though the token is still set.
+    assert.equal((await client().post('/api/admin/bootstrap', { token: TOKEN, email: 'second@example.test', full_name: 'Second', password })).status, 404);
+
+    const log = await anon.get('/api/admin/audit?action=bootstrap');
+    assert.ok(log.body.items.some((a) => a.action === 'admin.bootstrap'), 'the bootstrap is audited');
+    config.adminBootstrapToken = '';
+  });
+});

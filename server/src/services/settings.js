@@ -22,6 +22,7 @@ export const SETTING_SCHEMAS = {
   }),
   moderation: z.object({
     require_video_moderation: z.boolean(),
+    require_email_verification: z.boolean(),
     comments_enabled: z.boolean(),
   }),
   trending: z.object({
@@ -58,7 +59,9 @@ export const DEFAULTS = {
     allowed_formats: ['mp4', 'webm', 'mov'],
     thumbnail_max_mb: 5,
   },
-  moderation: { require_video_moderation: true, comments_enabled: true },
+  // Email verification is off by default so the platform works before SMTP exists. Creator
+  // approval is the gate that matters: a channel still has to be reviewed before it can upload.
+  moderation: { require_video_moderation: true, require_email_verification: false, comments_enabled: true },
   trending: {
     window_hours: 72,
     half_life_hours: 48,

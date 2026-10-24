@@ -9,7 +9,7 @@ export default async function channelEdit({ root }) {
   if (!state.user) { navigate(`/login?next=${encodeURIComponent(location.pathname)}`, { replace: true }); return; }
   const editing = !!state.channel;
   setTitle(editing ? 'Edit channel' : 'Set up your channel');
-  if (!state.user.email_verified) {
+  if (state.config?.email_verification_required && !state.user.email_verified) {
     root.append(h('div', { class: 'page narrow' }, h('div', { class: 'notice warn' }, h('b', null, 'Verify your email first. '), 'We sent a link to ', state.user.email, '. You can create your channel right after confirming it.',
       h('div', { style: 'margin-top:10px' }, h('button', { class: 'btn sm', onclick: async (e) => { e.target.disabled = true; try { await api.post('/api/auth/resend-verification'); toast('Verification email sent'); } catch (er) { toast(er.message, 'bad'); } e.target.disabled = false; } }, 'Resend email')))));
     return;

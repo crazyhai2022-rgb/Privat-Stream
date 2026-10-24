@@ -1,4 +1,4 @@
-import { h, icon, setTitle, toast, fmtDate } from '../util.js';
+import { h, icon, setTitle, toast, fmtDate, passwordInput } from '../util.js';
 import { api, state, applyMe, logout } from '../api.js';
 import { navigate } from '../router.js';
 
@@ -22,12 +22,13 @@ export default async function settings({ root }) {
     h('button', { class: 'btn primary sm', onclick: async () => { try { applyMe(await api.patch('/api/auth/profile', { full_name: name.value })); msg(pmsg, 'Saved', true); } catch (e) { msg(pmsg, e.message, false); } } }, 'Save')));
 
   // Password
-  const cur = h('input', { class: 'input', id: 'cur', type: 'password', autocomplete: 'current-password' });
-  const nw = h('input', { class: 'input', id: 'nw', type: 'password', autocomplete: 'new-password' });
+  const curWrap = passwordInput({ id: 'cur', autocomplete: 'current-password' });
+  const nwWrap = passwordInput({ id: 'nw', autocomplete: 'new-password' });
+  const cur = curWrap.input, nw = nwWrap.input;
   const wmsg = h('div', { hidden: true });
   page.append(h('section', { class: 'card', style: 'margin-bottom:16px' }, h('h2', { class: 'sec', style: 'margin-bottom:10px' }, 'Password'),
-    h('div', { class: 'field' }, h('label', { for: 'cur' }, 'Current password'), cur),
-    h('div', { class: 'field' }, h('label', { for: 'nw' }, 'New password'), nw, h('div', { class: 'hint' }, 'At least 10 characters with letters and numbers. Changing it logs out your other devices.')), wmsg,
+    h('div', { class: 'field' }, h('label', { for: 'cur' }, 'Current password'), curWrap),
+    h('div', { class: 'field' }, h('label', { for: 'nw' }, 'New password'), nwWrap, h('div', { class: 'hint' }, 'At least 10 characters with letters and numbers. Changing it logs out your other devices.')), wmsg,
     h('button', { class: 'btn primary sm', onclick: async () => { try { await api.post('/api/auth/change-password', { current_password: cur.value, new_password: nw.value }); cur.value = ''; nw.value = ''; msg(wmsg, 'Password updated', true); } catch (e) { msg(wmsg, e.message, false); } } }, 'Update password')));
 
   // Channel & session

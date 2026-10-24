@@ -97,7 +97,9 @@ export async function initDb() {
   if (impl) return impl;
   if (config.databaseUrl) impl = await initPg();
   else {
-    if (config.isProd) throw new Error('DATABASE_URL is required in production');
+    if (config.isProd && !config.allowEmbeddedDb) {
+      throw new Error('DATABASE_URL is required in production (or set ALLOW_EMBEDDED_DB=true to use the embedded database)');
+    }
     impl = await initPglite();
   }
   return impl;

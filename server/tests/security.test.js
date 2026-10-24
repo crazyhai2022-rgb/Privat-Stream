@@ -131,3 +131,31 @@ describe('injection and object-reference safety', () => {
     assert.equal(nf.status, 404);
   });
 });
+
+describe('the development email outbox is not a public endpoint', () => {
+  test('it answers local requests only, and never leaks links to a proxied caller', async () => {
+    // helpers.js enables it explicitly and the test client connects over loopback.
+    const local = await client().get('/api/dev/outbox');
+    assert.equal(local.status, 200, 'available to a direct local request during development');
+
+    const { config } = await import('../src/config.js');
+    assert.equal(config.exposeOutbox, true, 'only because the test harness switched it on');
+
+    // Behind a proxy every caller looks local, so the endpoint refuses to answer at all.
+    const original = config.trustProxy;
+    config.trustProxy = true;
+    try {
+      const proxied = await client().get('/api/dev/outbox');
+      assert.equal(proxied.status, 404, 'treated as not found when the app sits behind a proxy');
+    } finally {
+      config.trustProxy = original;
+    }
+  });
+
+  test('it is off unless explicitly enabled', async () => {
+    // The default is false in every mode; production additionally refuses to start with it on.
+    const src = await import('node:fs').then((fs) => fs.promises.readFile(new URL('../src/config.js', import.meta.url), 'utf8'));
+    assert.match(src, /exposeOutbox: bool\(env\.EXPOSE_EMAIL_OUTBOX, false\)/);
+    assert.match(src, /EXPOSE_EMAIL_OUTBOX must be false in production/);
+  });
+});

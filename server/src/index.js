@@ -24,6 +24,15 @@ if (!(await hasFfmpeg())) {
   }
 }
 
+if (config.exposeOutbox) {
+  console.warn('EXPOSE_EMAIL_OUTBOX is on: /api/dev/outbox serves verification and password-reset');
+  console.warn('links to local requests. Use it only on your own machine, never on a live server.');
+}
+if (config.isProd && config.smtp.transport === 'log' && !config.smtp.host) {
+  console.warn('MAIL_TRANSPORT=log: verification and reset links go to this log, not to inboxes.');
+  console.warn('Configure SMTP_* before real users sign up.');
+}
+
 const app = createApp();
 const server = app.listen(config.port, () => {
   console.log(`viralX running on ${config.baseUrl}  (db: ${db.driver}, storage: ${config.storage.driver}, env: ${config.env})`);

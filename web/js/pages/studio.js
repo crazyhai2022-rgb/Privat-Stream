@@ -18,7 +18,7 @@ export default async function studio({ root }) {
   root.append(page);
   page.append(h('h1', { class: 'title', style: 'margin-bottom:12px' }, 'Creator studio'));
 
-  if (!state.user.email_verified) {
+  if (state.config?.email_verification_required && !state.user.email_verified) {
     page.append(h('div', { class: 'notice warn' }, h('b', null, 'Verify your email address. '), `We sent a link to ${state.user.email}.`,
       h('div', { style: 'margin-top:10px' }, h('button', { class: 'btn sm', onclick: async (e) => { e.target.disabled = true; try { await api.post('/api/auth/resend-verification'); toast('Verification email sent'); } catch (er) { toast(er.message, 'bad'); } e.target.disabled = false; } }, 'Resend email'))));
     return;

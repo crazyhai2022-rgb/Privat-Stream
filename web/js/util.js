@@ -62,6 +62,7 @@ const ICONS = {
   refresh: 'M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.2L3 16M3 21v-5h5',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   eye: ['M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
+  'eye-off': ['M10.6 6.2A9.9 9.9 0 0 1 12 6c7 0 11 6 11 6a18 18 0 0 1-3.3 3.9M6.4 6.5A18 18 0 0 0 1 12s4 6 11 6a10 10 0 0 0 4.1-.9', 'M9.9 9.9a3 3 0 0 0 4.2 4.2', 'M2 2l20 20'],
   check: 'M5 12l5 5 9-10',
   info: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M12 16v-4M12 8h.01'],
   tag: ['M20 12l-8 8-9-9V3h8z', 'M7.5 7.5h.01'],
@@ -79,6 +80,34 @@ export function icon(name, cls = '') {
   }
   return svg;
 }
+/**
+ * A password box with a show/hide control, so people can check what they typed.
+ * Returns the wrapper; `wrap.input` is the <input> itself.
+ */
+export function passwordInput(props = {}) {
+  const input = h('input', { class: 'input pw-input', type: 'password', ...props });
+  let shown = false;
+  const btn = h('button', {
+    class: 'pw-toggle', type: 'button', 'aria-label': 'Show password', 'aria-pressed': 'false', title: 'Show password',
+    onclick: () => {
+      shown = !shown;
+      // Keep the caret where it was, otherwise it jumps to the start on some browsers.
+      const { selectionStart: a, selectionEnd: b } = input;
+      input.type = shown ? 'text' : 'password';
+      try { input.setSelectionRange(a, b); } catch { /* not supported on some types */ }
+      btn.setAttribute('aria-pressed', String(shown));
+      const label = shown ? 'Hide password' : 'Show password';
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('title', label);
+      btn.replaceChildren(icon(shown ? 'eye-off' : 'eye'));
+      input.focus();
+    },
+  }, icon('eye'));
+  const wrap = h('div', { class: 'pw-wrap' }, input, btn);
+  wrap.input = input;
+  return wrap;
+}
+
 /**
  * Renders the brand name as a wordmark. A trailing capital letter (the X in "viralX")
  * is drawn in the brand gradient, matching the logo.

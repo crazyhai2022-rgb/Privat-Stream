@@ -34,12 +34,14 @@ async function requireUploader(req, res, next) {
   try {
     const ch = await ownerChannel(req);
     if (!ch) return next(forbidden('Create your channel before uploading', 'no_channel'));
-    if (!canUpload(req.user, ch)) {
-      const msg = !req.user.email_verified_at ? 'Verify your email before uploading'
+    const { require_email_verification: requireEmailVerification } = await getSetting('moderation');
+    if (!canUpload(req.user, ch, { requireEmailVerification })) {
+      const msg = (requireEmailVerification && !req.user.email_verified_at) ? 'Verify your email before uploading'
         : ch.status === 'pending' ? 'Your creator account is pending review'
         : ch.status === 'rejected' ? 'Your creator application was rejected'
         : ch.status === 'suspended' ? 'Your channel is suspended' : 'You cannot upload right now';
-      return next(forbidden(msg, `creator_${ch.status}`));
+      const code = (requireEmailVerification && !req.user.email_verified_at) ? 'email_unverified' : `creator_${ch.status}`;
+      return next(forbidden(msg, code));
     }
     req.channel = ch;
     next();

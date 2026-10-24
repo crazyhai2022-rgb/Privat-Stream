@@ -60,7 +60,11 @@ export function createApp() {
 
   if (config.exposeOutbox) {
     // Development helper: read verification / reset links without an SMTP server.
-    app.get('/api/dev/outbox', async (req, res) => {
+    // Guarded again here: anything that is not a direct local request is treated as not found.
+    app.get('/api/dev/outbox', async (req, res, next) => {
+      const addr = req.socket?.remoteAddress || '';
+      const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(addr);
+      if (!local || config.trustProxy) return next();
       const to = String(req.query.to || '').toLowerCase();
       const rows = await db.query('select to_email, subject, link, created_at from email_outbox where ($1 = \'\' or lower(to_email) = $1) order by id desc limit 20', [to]);
       res.json({ items: rows });

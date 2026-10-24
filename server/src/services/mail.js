@@ -20,8 +20,11 @@ export async function sendMail({ to, subject, text, link }) {
     await t.sendMail({ from: config.smtp.from, to, subject, text });
     return;
   }
-  if (config.isProd) throw new Error('SMTP is not configured; cannot send email in production');
-  // Development fallback: keep the message in the outbox table and print the link.
+  if (config.isProd && config.smtp.transport !== 'log') {
+    throw new Error('SMTP is not configured; cannot send email in production');
+  }
+  // No SMTP: keep the message in the outbox table and write the link to the server log.
+  // The log is only readable by whoever administers the server, never over HTTP.
   await db.query('insert into email_outbox (to_email, subject, body, link) values ($1,$2,$3,$4)', [to, subject, text, link || null]);
-  if (!config.isTest) console.log(`[mail:dev] to=${to} subject="${subject}"${link ? ` link=${link}` : ''}`);
+  if (!config.isTest) console.log(`[mail:${config.isProd ? 'log' : 'dev'}] to=${to} subject="${subject}"${link ? ` link=${link}` : ''}`);
 }

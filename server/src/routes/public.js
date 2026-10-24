@@ -22,6 +22,7 @@ api.get('/config', wrap(async (req, res) => {
       allowed_formats: s.upload.allowed_formats, thumbnail_max_mb: s.upload.thumbnail_max_mb,
     },
     comments_enabled: s.moderation.comments_enabled,
+    email_verification_required: s.moderation.require_email_verification,
     policies: s.policies,
     telegram_default: normalizeTelegramUrl(s.telegram.global_url),
     categories,

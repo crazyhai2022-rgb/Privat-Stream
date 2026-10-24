@@ -7,7 +7,7 @@ Two things shared hosting almost never provides, and what to do about each:
 
 | Missing | Fix |
 | --- | --- |
-| **PostgreSQL** (cPanel gives MySQL) | Use a free managed PostgreSQL — [Neon](https://neon.tech) or [Supabase](https://supabase.com). Both have a free tier that is plenty for testing, and you only paste a connection string. |
+| **PostgreSQL** (cPanel gives MySQL) | Either use the built-in embedded database that stores data on your hosting disk, or a free managed PostgreSQL (Neon, Supabase). Step 1 compares them. |
 | **ffmpeg** | Install a static build in your home directory with `deploy/install-ffmpeg-static.sh`. If your host blocks that, you can run without it — see *Without ffmpeg* below. |
 
 One more limitation to plan for: Passenger stops your app when nobody is visiting,
@@ -16,15 +16,23 @@ so the built-in background worker will not run reliably. Use a cron job instead
 
 ---
 
-## 1. Get a PostgreSQL database
+## 1. Choose where the data lives
 
-1. Sign up at Neon or Supabase and create a project (pick the region closest to
-   your hosting — Singapore or Mumbai for Indian hosting).
-2. Copy the connection string. It looks like:
-   ```
-   postgresql://user:password@ep-something.ap-southeast-1.aws.neon.tech/viralx?sslmode=require
-   ```
-3. Keep it for step 4. You will also set `DATABASE_SSL=true`.
+**Option A — the built-in database (no extra service).** viralX ships with an embedded
+PostgreSQL that stores everything in a folder on your hosting disk. Nothing to sign up for.
+Set `ALLOW_EMBEDDED_DB=true` and `PGLITE_DIR` in step 4.
+
+Keep the folder **outside** the repository, e.g. `/home/USERNAME/viralx-data/db`, so a Git
+*Pull* never touches your data.
+
+Two things to know: only one process may open it at a time (so the cron worker and
+command-line scripts cannot run while the app is up), and there is no `pg_dump` — you back it
+up by copying the folder.
+
+**Option B — a managed PostgreSQL (recommended once you have real users).** Create a free
+project on [Neon](https://neon.tech) or [Supabase](https://supabase.com), copy the connection
+string into `DATABASE_URL` and set `DATABASE_SSL=true`. This removes the single-process limit
+and gives you real backups. Nothing else in the setup changes.
 
 ## 2. Put the code on the server
 
@@ -52,18 +60,30 @@ and it hands off to the real server.
 
 ## 4. Environment variables
 
-Still in *Setup Node.js App*, add these (the **Add Variable** button):
+Still in *Setup Node.js App*, add these with the **Add Variable** button:
 
 | Name | Value |
 | --- | --- |
 | `NODE_ENV` | `production` |
 | `APP_SECRET` | 32+ random characters — generate one below |
-| `DATABASE_URL` | the connection string from step 1 |
-| `DATABASE_SSL` | `true` |
-| `BASE_URL` | `https://viralx.yourdomain.com` (exactly how visitors reach it) |
+| `BASE_URL` | exactly how visitors reach the site, e.g. `https://viralx.yourdomain.com` |
 | `TRUST_PROXY` | `true` |
 | `RUN_WORKER` | `false` (cron handles processing — step 7) |
-| `STORAGE_LOCAL_DIR` | `/home/USERNAME/viralx-media` |
+| `STORAGE_LOCAL_DIR` | `/home/USERNAME/viralx-data/media` |
+
+Then, for **Option A** (built-in database):
+
+| Name | Value |
+| --- | --- |
+| `ALLOW_EMBEDDED_DB` | `true` |
+| `PGLITE_DIR` | `/home/USERNAME/viralx-data/db` |
+
+or, for **Option B** (managed PostgreSQL):
+
+| Name | Value |
+| --- | --- |
+| `DATABASE_URL` | the connection string |
+| `DATABASE_SSL` | `true` |
 
 Generate the secret on your own machine:
 
@@ -71,9 +91,23 @@ Generate the secret on your own machine:
 node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 ```
 
-Email is optional to start — without `SMTP_*` set, verification links are written
-to the log instead of being sent, which is fine while testing. Add Brevo, Resend or
-your cPanel mailbox before real users sign up.
+### Run in Production mode, not Development
+
+Set **Application mode: Production**. Development mode is not just slower — it turns off
+checks that exist for a live site, and the app refuses to start in production until the
+important settings are present, which is exactly what you want.
+
+### Email
+
+Until SMTP exists, add `MAIL_TRANSPORT=log`. Sign-up keeps working and the verification link
+is written to the app's log file (visible in *Setup Node.js App*), where only you can read it.
+
+Do **not** set `EXPOSE_EMAIL_OUTBOX`. It serves those links over HTTP for local development
+only; on a reachable server anyone could use it to take over an account. It is off by default
+and production refuses to start with it on.
+
+Once you have SMTP (Brevo, Resend, or a cPanel mailbox), remove `MAIL_TRANSPORT` and set
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` and `MAIL_FROM`.
 
 ## 5. Install dependencies and start
 
@@ -117,20 +151,54 @@ Node version, so adjust it.
 The script exits immediately when the queue is empty, and two runs can never pick up
 the same video, so running it every minute is safe.
 
+> **With the built-in database this cron job cannot run**, because the app already holds the
+> database open. Leave `RUN_WORKER=true` instead so the app processes videos itself, and
+> accept that a video may wait until someone visits the site and wakes the app. Moving to a
+> managed PostgreSQL (step 1, Option B) removes this limitation.
+
 ## 8. Create your administrator
 
-Over SSH:
+**With SSH or cPanel Terminal:**
 
 ```bash
-source /home/USERNAME/nodevenv/viralx/server/22/bin/activate
+source /home/USERNAME/nodevenv/viralx/server/24/bin/activate
 cd ~/viralx/server
 node src/scripts/create-admin.js --email you@example.com --name "Your Name" --generate
 ```
 
-It prints a one-time password. Sign in at `https://viralx.yourdomain.com/admin` and
-change it.
+> With the built-in database this only works while the app is **stopped**, because one
+> process may open it at a time. Stop the app in *Setup Node.js App* first, run the command,
+> then start it again.
 
-No SSH? cPanel → **Terminal** does the same thing.
+**Without a shell** (Terminal disabled, or you do not want to stop the app) — use the
+one-time bootstrap, which only exists until the first Super Admin is created:
+
+1. Add an environment variable `ADMIN_BOOTSTRAP_TOKEN` with 24+ random characters, and restart.
+2. From your own computer, run (replacing the values):
+
+   ```bash
+   curl -X POST https://viralx.yourdomain.com/api/admin/bootstrap \
+     -H 'Content-Type: application/json' -H 'X-Requested-With: fetch' \
+     -d '{"token":"YOUR_TOKEN","email":"you@example.com","full_name":"Your Name","password":"a-strong-password"}'
+   ```
+3. **Delete `ADMIN_BOOTSTRAP_TOKEN`** and restart.
+
+The endpoint answers only while no Super Admin exists, refuses a token shorter than 24
+characters, compares tokens in constant time, is rate limited, and records the action in the
+audit log. A wrong token gets the same 404 as a missing one, so it reveals nothing.
+
+Then sign in at `https://viralx.yourdomain.com/admin`.
+
+## 9. Check the moderation settings
+
+In the admin panel, **Platform settings → Moderation**:
+
+- **Require a verified email address** — off by default, which is what you want until SMTP
+  works. Anyone can sign up and create a channel; it still lands in *Pending Review*, and only
+  your approval lets them upload. Turn this on once email is sending.
+- **Every new upload must be approved** — leave on so nothing goes live unseen.
+
+New creators appear under **Creator approvals**.
 
 ---
 

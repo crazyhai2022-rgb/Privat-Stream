@@ -31,11 +31,45 @@ describe('creator approval gates uploading', () => {
     assert.equal(up.status, 403);
   });
 
-  test('an unverified user cannot create a channel', async () => {
+  test('email verification gates channel creation only when the platform asks for it', async () => {
+    const { setSetting, invalidateSettings } = await import('../src/services/settings.js');
+    const base = { require_video_moderation: true, comments_enabled: true };
+
+    // Default: no SMTP needed to get started, so an unverified user may create a channel.
+    await setSetting('moderation', { ...base, require_email_verification: false });
+    const open = await makeUser({ verify: false });
+    const created = await open.client.post('/api/me/channel', { name: 'Open', handle: 'unverified_ok', bio: '', category_ids: [] });
+    assert.equal(created.status, 201);
+    // It still lands in review and still cannot upload.
+    assert.equal(created.body.channel.status, 'pending');
+    assert.equal(created.body.can_upload, false);
+    assert.equal((await open.client.post('/api/videos', { kind: 'short', title: 'x' })).status, 403);
+
+    // Switched on, the same request is refused.
+    await setSetting('moderation', { ...base, require_email_verification: true });
+    const strict = await makeUser({ verify: false });
+    const blocked = await strict.client.post('/api/me/channel', { name: 'Nope', handle: 'unverified_x', bio: '', category_ids: [] });
+    assert.equal(blocked.status, 403);
+    assert.equal(blocked.body.error.code, 'email_unverified');
+
+    await setSetting('moderation', { ...base, require_email_verification: false });
+    invalidateSettings();
+  });
+
+  test('an unverified creator can be approved and then upload', async () => {
     const u = await makeUser({ verify: false });
-    const r = await u.client.post('/api/me/channel', { name: 'Nope', handle: 'unverified_x', bio: '', category_ids: [] });
-    assert.equal(r.status, 403);
-    assert.equal(r.body.error.code, 'email_unverified');
+    await u.client.post('/api/me/channel', { name: 'Review me', handle: 'reviewme_x', bio: '', category_ids: [] });
+    const ch = await db.one('select id from channels where user_id = $1', [u.userId]);
+    const admin = await makeAdmin();
+
+    // Before approval: blocked.
+    assert.equal((await u.client.post('/api/videos', { kind: 'short', title: 'early' })).status, 403);
+
+    assert.equal((await admin.client.post(`/api/admin/channels/${ch.id}/approve`, {})).status, 200);
+
+    const me = await u.client.get('/api/auth/me');
+    assert.equal(me.body.can_upload, true, 'approval alone unlocks uploading');
+    assert.equal((await u.client.post('/api/videos', { kind: 'short', title: 'allowed' })).status, 201);
   });
 
   test('rejected and suspended creators cannot upload; a rejected creator can resubmit', async () => {

@@ -1,5 +1,5 @@
 // Super Admin panel: separate login (admin session cookie), role-aware navigation, real data only.
-import { h, icon, brandWordmark, toast, confirmDialog, openModal, fmtCount, fmtDateTime, timeAgo, statusPill, statusLabel, fmtDur, qs, initials } from '../js/util.js';
+import { h, icon, brandWordmark, passwordInput, toast, confirmDialog, openModal, fmtCount, fmtDateTime, timeAgo, statusPill, statusLabel, fmtDur, qs, initials } from '../js/util.js';
 import { api, state, ApiError } from '../js/api.js';
 
 const app = document.getElementById('app');
@@ -50,7 +50,8 @@ async function act(fn, okMsg, after) {
 // ---------- login ----------
 function loginView() {
   const email = input({ type: 'email', autocomplete: 'username', required: true });
-  const pw = input({ type: 'password', autocomplete: 'current-password', required: true });
+  const pwWrap = passwordInput({ autocomplete: 'current-password', required: true });
+  const pw = pwWrap.input;
   const msg = h('div', { class: 'err', hidden: true });
   const btn = h('button', { class: 'btn primary', type: 'submit', style: 'width:100%;height:42px' }, 'Log in');
   app.replaceChildren(h('div', { class: 'adm-login' },
@@ -64,7 +65,7 @@ function loginView() {
         render();
       } catch (e2) { msg.textContent = e2.message; msg.hidden = false; }
       btn.disabled = false;
-    } }, field('Email', email), field('Password', pw), msg, btn),
+    } }, field('Email', email), field('Password', pwWrap), msg, btn),
     h('p', { class: 'muted small', style: 'text-align:center;margin-top:14px' }, 'Administrator accounts are created with the create-admin script on the server.')));
   email.focus();
 }
@@ -531,6 +532,7 @@ async function settingsPage() {
   const fmts = ['mp4', 'webm', 'mov'].map((f) => { const i = check(s.upload.allowed_formats.includes(f)); return { f, i, el: h('label', { class: 'row small' }, i, f.toUpperCase()) }; });
   // Moderation
   const mReview = check(s.moderation.require_video_moderation), mComments = check(s.moderation.comments_enabled);
+  const mVerify = check(s.moderation.require_email_verification);
   // Trending
   const t = s.trending;
   const tw = { window_hours: num(t.window_hours, { min: 1, max: 720 }), half_life_hours: num(t.half_life_hours, { min: 1, max: 720 }),
@@ -559,8 +561,10 @@ async function settingsPage() {
         thumbnail_max_mb: +uThumbMb.value, allowed_formats: fmts.filter((x) => x.i.checked).map((x) => x.f) }, b))),
     section('Moderation',
       h('label', { class: 'toggle' }, mReview, 'Every new upload must be approved before it is published'),
+      h('label', { class: 'toggle' }, mVerify, 'Require a verified email address before creating a channel or commenting'),
+      h('p', { class: 'muted small', style: 'margin:-4px 0 8px 26px' }, 'Leave this off until SMTP is configured, otherwise nobody can get past sign-up. Creator approval still gates uploading either way.'),
       h('label', { class: 'toggle' }, mComments, 'Comments enabled platform-wide'),
-      saveBtn((b) => save('moderation', { require_video_moderation: mReview.checked, comments_enabled: mComments.checked }, b))),
+      saveBtn((b) => save('moderation', { require_video_moderation: mReview.checked, require_email_verification: mVerify.checked, comments_enabled: mComments.checked }, b))),
     section('Trending & ranking', h('p', { class: 'muted small', style: 'margin-bottom:10px' }, 'Score = (views×w + hearts×w + shares×w + comments×w − dislikes×w) × engagement bonus × time decay. The window limits which activity counts; the half-life controls how fast older videos fade, so old videos cannot dominate.'),
       h('div', { class: 'setting-grid' }, field('Time window (hours)', tw.window_hours), field('Half-life (hours)', tw.half_life_hours),
         field('Weight: views', tw.w_views), field('Weight: hearts', tw.w_hearts), field('Weight: shares', tw.w_shares),

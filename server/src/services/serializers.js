@@ -25,5 +25,8 @@ export const channelDto = (c, extra = {}) => c && ({
   ...extra,
 });
 
-export const canUpload = (user, channel) =>
-  !!(user && user.email_verified_at && user.account_status === 'active' && channel && channel.status === 'approved');
+export const canUpload = (user, channel, { requireEmailVerification = false } = {}) =>
+  !!(user
+    && (user.email_verified_at || !requireEmailVerification)
+    && user.account_status === 'active'
+    && channel && channel.status === 'approved');

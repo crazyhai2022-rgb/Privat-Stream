@@ -8,7 +8,7 @@ function gate(root) {
   if (state.canUpload) return true;
   const ch = state.channel;
   let text, action;
-  if (!state.user.email_verified) { text = 'Verify your email address before uploading.'; action = h('a', { class: 'btn primary', href: '/studio' }, 'Go to studio'); }
+  if (state.config?.email_verification_required && !state.user.email_verified) { text = 'Verify your email address before uploading.'; action = h('a', { class: 'btn primary', href: '/studio' }, 'Go to studio'); }
   else if (!ch) { text = 'Create your channel first. After that, an administrator reviews your creator application.'; action = h('a', { class: 'btn primary', href: '/channel/setup' }, 'Set up channel'); }
   else if (ch.status === 'pending') { text = 'Your creator account is Pending Review. You can upload as soon as it is approved.'; action = h('a', { class: 'btn primary', href: '/studio' }, 'View status'); }
   else if (ch.status === 'rejected') { text = `Your creator application was rejected${ch.status_reason ? `: ${ch.status_reason}` : '.'}`; action = h('a', { class: 'btn primary', href: '/studio/channel' }, 'Edit & resubmit'); }
