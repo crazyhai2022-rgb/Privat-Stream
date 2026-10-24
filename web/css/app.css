@@ -325,6 +325,26 @@ body.immersive #view { margin-left: var(--side-w); padding-top: var(--topbar-h);
   .sv-sheet { height: 70%; }
   .sv-mobile-bar { display: flex; }
 }
+/* ---------- Tablet: compact header, but more than one column ---------- */
+@media (min-width: 600px) and (max-width: 899px) {
+  .page { padding: 16px 18px 48px; }
+  .lgrid, .lgrid.all { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 14px; }
+  .lgrid > :nth-child(n+5) { display: none; }
+  .lgrid.all > :nth-child(n) { display: block; }
+  .lcard .th { border-radius: var(--radius); margin: 0; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+  .rail .scard { flex-basis: 22vw; }
+  .sgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .opt-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .player { border-radius: var(--radius); margin: 0; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+  .banner { height: 150px; }
+  /* Shorts stay immersive, but the stage keeps its 9:16 shape and the controls sit beside it. */
+  .sv-item { display: flex; justify-content: center; align-items: center; padding: 0; }
+  .sv-stage { width: auto; height: 100%; max-width: 100%; aspect-ratio: 9 / 16; border-radius: 0; }
+  .sv-actions { position: static; padding: 0 0 0 10px; gap: 14px; }
+  .sv-actions .ico { background: var(--elev); border-color: var(--line); }
+  .sv-info { right: 14px; }
+}
+
 @media (min-width: 900px) {
   .sv-mobile-bar { display: none !important; }
 }
