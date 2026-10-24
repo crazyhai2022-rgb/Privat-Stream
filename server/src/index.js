@@ -13,7 +13,7 @@ await ensureDefaultCategories();
 
 const app = createApp();
 const server = app.listen(config.port, () => {
-  console.log(`Privat Stream running on ${config.baseUrl}  (db: ${db.driver}, storage: ${config.storage.driver}, env: ${config.env})`);
+  console.log(`viralX running on ${config.baseUrl}  (db: ${db.driver}, storage: ${config.storage.driver}, env: ${config.env})`);
   const hasAdmin = null;
   void hasAdmin;
 });

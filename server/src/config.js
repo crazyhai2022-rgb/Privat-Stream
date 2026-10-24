@@ -53,7 +53,7 @@ export const config = {
     port: num(env.SMTP_PORT, 587),
     user: env.SMTP_USER || '',
     pass: env.SMTP_PASS || '',
-    from: env.MAIL_FROM || 'Privat Stream <no-reply@localhost>',
+    from: env.MAIL_FROM || 'viralX <no-reply@localhost>',
     secure: bool(env.SMTP_SECURE, false),
   },
 

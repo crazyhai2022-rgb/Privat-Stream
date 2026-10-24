@@ -1,4 +1,4 @@
-# Privat Stream
+# viralX
 
 A Shorts-first video platform: short vertical videos are the main content type, long-form
 landscape videos sit alongside them. It ships with a working backend, database, object storage,
@@ -52,8 +52,8 @@ With no `DATABASE_URL`, the app runs an **embedded PostgreSQL (PGlite)** stored 
 
 ```bash
 # With a real PostgreSQL server
-createdb privat_stream
-export DATABASE_URL='postgres://user:password@localhost:5432/privat_stream'
+createdb viralx
+export DATABASE_URL='postgres://user:password@localhost:5432/viralx'
 npm run migrate && npm start
 ```
 

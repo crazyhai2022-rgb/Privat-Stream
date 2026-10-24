@@ -80,16 +80,44 @@ export function icon(name, cls = '') {
   return svg;
 }
 export function logoMark() {
+  // App mark: the brand's gradient X on a rounded dark tile.
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 32 32');
   svg.setAttribute('aria-hidden', 'true');
-  const r = document.createElementNS(NS, 'rect');
-  for (const [k, v] of Object.entries({ x: 2, y: 2, width: 28, height: 28, rx: 8, fill: '#f5f5f5' })) r.setAttribute(k, v);
-  const p = document.createElementNS(NS, 'path');
-  p.setAttribute('d', 'M13 9.5v13l10-6.5z');
-  p.setAttribute('fill', '#0b0b0b');
-  svg.append(r, p);
+  const id = 'bx' + Math.random().toString(36).slice(2, 8);
+  const defs = document.createElementNS(NS, 'defs');
+  const grad = document.createElementNS(NS, 'linearGradient');
+  grad.setAttribute('id', id);
+  grad.setAttribute('x1', '0'); grad.setAttribute('y1', '1'); grad.setAttribute('x2', '1'); grad.setAttribute('y2', '0');
+  for (const [off, col] of [['0', '#fa025b'], ['1', '#7125fd']]) {
+    const st = document.createElementNS(NS, 'stop');
+    st.setAttribute('offset', off); st.setAttribute('stop-color', col);
+    grad.append(st);
+  }
+  defs.append(grad);
+  const tile = document.createElementNS(NS, 'rect');
+  for (const [k, v] of Object.entries({ x: 1, y: 1, width: 30, height: 30, rx: 8, fill: '#0b0b0f' })) tile.setAttribute(k, v);
+  const x1 = document.createElementNS(NS, 'path');
+  x1.setAttribute('d', 'M9 8h5.2l9 16H18z');
+  x1.setAttribute('fill', `url(#${id})`);
+  const x2 = document.createElementNS(NS, 'path');
+  x2.setAttribute('d', 'M23 8h-5.2l-9 16H14z');
+  x2.setAttribute('fill', `url(#${id})`);
+  x2.setAttribute('opacity', '0.92');
+  svg.append(defs, tile, x1, x2);
   return svg;
+}
+
+/**
+ * Renders the brand name as a wordmark. A trailing capital letter (the X in "viralX")
+ * is drawn in the brand gradient, matching the logo.
+ */
+export function brandWordmark(name = 'viralX', cls = '') {
+  const m = /^(.*\S)([A-Z])$/.exec(String(name || '').trim());
+  const wrap = h('span', { class: `wordmark ${cls}`.trim() });
+  if (m) wrap.append(m[1], h('span', { class: 'wm-x' }, m[2]));
+  else wrap.append(String(name || ''));
+  return wrap;
 }
 
 // ---------- Formatting ----------
@@ -168,6 +196,6 @@ export function confirmDialog({ title, text, confirmText = 'Confirm', danger = f
   });
 }
 
-export function setTitle(t) { document.title = t ? `${t} · ${window.__brand || 'Privat Stream'}` : (window.__brand || 'Privat Stream'); }
+export function setTitle(t) { document.title = t ? `${t} · ${window.__brand || 'viralX'}` : (window.__brand || 'viralX'); }
 export const qs = (obj) => { const p = new URLSearchParams(); for (const [k, v] of Object.entries(obj || {})) if (v !== undefined && v !== null && v !== '') p.set(k, v); const s = p.toString(); return s ? `?${s}` : ''; };
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

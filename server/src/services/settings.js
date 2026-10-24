@@ -48,7 +48,7 @@ export const SETTING_SCHEMAS = {
 };
 
 export const DEFAULTS = {
-  brand: { name: 'Privat Stream', tagline: 'Short videos first' },
+  brand: { name: 'viralX', tagline: 'Short videos first' },
   telegram: { global_url: '', allow_creator_override: true, locked: false },
   upload: {
     short_max_seconds: 90,

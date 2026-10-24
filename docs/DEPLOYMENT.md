@@ -30,7 +30,7 @@ Set `TRUST_PROXY=true` only behind a proxy you control, so rate limiting reads t
 ## 3. First deploy
 
 ```bash
-git clone <your repo> && cd privat-stream/server
+git clone <your repo> && cd viralx/server
 npm ci --omit=dev
 npm run migrate
 npm run create-admin -- --email you@example.com --name "Your Name"
@@ -40,16 +40,16 @@ NODE_ENV=production npm start
 ## 4. systemd
 
 ```ini
-# /etc/systemd/system/privat-stream.service
+# /etc/systemd/system/viralx.service
 [Unit]
-Description=Privat Stream
+Description=viralX
 After=network.target postgresql.service
 
 [Service]
 Type=simple
 User=privat
-WorkingDirectory=/srv/privat-stream/server
-EnvironmentFile=/srv/privat-stream/server/.env
+WorkingDirectory=/srv/viralx/server
+EnvironmentFile=/srv/viralx/server/.env
 Environment=NODE_ENV=production
 ExecStart=/usr/bin/node src/index.js
 Restart=always
@@ -57,14 +57,14 @@ RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/srv/privat-stream/server/tmp /srv/privat-stream/server/storage-data
+ReadWritePaths=/srv/viralx/server/tmp /srv/viralx/server/storage-data
 
 [Install]
 WantedBy=multi-user.target
 ```
 
 ```bash
-sudo systemctl daemon-reload && sudo systemctl enable --now privat-stream
+sudo systemctl daemon-reload && sudo systemctl enable --now viralx
 ```
 
 ## 5. nginx
@@ -122,13 +122,13 @@ services:
     image: postgres:16
     environment:
       POSTGRES_PASSWORD: change-me
-      POSTGRES_DB: privat_stream
+      POSTGRES_DB: viralx
     volumes: [pgdata:/var/lib/postgresql/data]
   app:
     build: .
     env_file: server/.env
     environment:
-      DATABASE_URL: postgres://postgres:change-me@db:5432/privat_stream
+      DATABASE_URL: postgres://postgres:change-me@db:5432/viralx
     ports: ["4000:4000"]
     depends_on: [db]
 volumes: { pgdata: }

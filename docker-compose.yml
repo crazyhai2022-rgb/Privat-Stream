@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-      POSTGRES_DB: privat_stream
+      POSTGRES_DB: viralx
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,7 +21,7 @@ services:
     env_file:
       - server/.env
     environment:
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-change-me}@db:5432/privat_stream
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-change-me}@db:5432/viralx
     ports:
       - "4000:4000"
     volumes:

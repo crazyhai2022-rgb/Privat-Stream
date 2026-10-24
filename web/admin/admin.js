@@ -1,8 +1,9 @@
 // Super Admin panel: separate login (admin session cookie), role-aware navigation, real data only.
-import { h, icon, logoMark, toast, confirmDialog, openModal, fmtCount, fmtDateTime, timeAgo, statusPill, statusLabel, fmtDur, qs, initials } from '../js/util.js';
+import { h, icon, logoMark, brandWordmark, toast, confirmDialog, openModal, fmtCount, fmtDateTime, timeAgo, statusPill, statusLabel, fmtDur, qs, initials } from '../js/util.js';
 import { api, state, ApiError } from '../js/api.js';
 
 const app = document.getElementById('app');
+const BRAND = () => state.config?.brand?.name || 'viralX';
 const S = { admin: null, perms: [], pending: {}, view: null };
 
 const PAGES = [
@@ -53,7 +54,7 @@ function loginView() {
   const msg = h('div', { class: 'err', hidden: true });
   const btn = h('button', { class: 'btn primary', type: 'submit', style: 'width:100%;height:42px' }, 'Log in');
   app.replaceChildren(h('div', { class: 'adm-login' },
-    h('div', { class: 'brand', style: 'justify-content:center;margin-bottom:6px' }, logoMark(), 'Privat Stream'),
+    h('div', { class: 'brand', style: 'justify-content:center;margin-bottom:6px' }, logoMark(), brandWordmark(BRAND())),
     h('p', { class: 'muted', style: 'text-align:center;margin-bottom:18px' }, 'Administration'),
     h('form', { class: 'card', onsubmit: async (e) => {
       e.preventDefault(); msg.hidden = true; btn.disabled = true;
@@ -74,7 +75,7 @@ function shell() {
   const nav = h('nav', null, PAGES.filter(([, , , p]) => can(p)).map(([key, label, ic]) =>
     h('a', { href: `#/${key}`, dataset: { key } }, icon(ic), label, h('span', { class: 'count', dataset: { badge: key }, hidden: true }))));
   sideEl = h('aside', { class: 'adm-side' },
-    h('div', { class: 'brand' }, logoMark(), 'Privat Stream'), h('div', { class: 'tagline' }, 'Super Admin'), nav,
+    h('div', { class: 'brand' }, logoMark(), brandWordmark(BRAND())), h('div', { class: 'tagline' }, 'Super Admin'), nav,
     h('div', { style: 'margin-top:14px;padding:0 10px' }, h('a', { href: '/', target: '_blank', rel: 'noopener', class: 'muted small' }, 'Open public site ↗')));
   titleEl = h('h1', { style: 'font-size:18px' }, 'Dashboard');
   bodyEl = h('div', { class: 'adm-body' });
@@ -598,6 +599,7 @@ async function audit() {
 const VIEWS = { dashboard, creators, videos: videosPage, reports, popularity, users, categories: categoriesPage, settings: settingsPage, audit };
 
 async function render() {
+  if (!state.config) { try { state.config = await api.get('/api/config'); } catch { /* optional */ } }
   if (!S.admin) {
     try {
       const me = await api.get('/api/admin/auth/me');
@@ -605,14 +607,13 @@ async function render() {
       S.admin = me.admin; S.perms = me.permissions; state.adminCsrf = me.csrf_token;
     } catch { return loginView(); }
   }
-  if (!state.config) { try { state.config = await api.get('/api/config'); } catch { /* optional */ } }
   shell();
   const [key, sub] = route();
   const def = PAGES.find(([, , , p]) => can(p));
   const entry = PAGES.find(([k, , , p]) => k === key && can(p)) || def;
   if (!entry) { bodyEl.replaceChildren(h('div', { class: 'empty' }, h('h3', null, 'No access'), h('p', null, 'Your role has no permissions.'))); return; }
   titleEl.textContent = entry[1];
-  document.title = `${entry[1]} · Admin`;
+  document.title = `${entry[1]} · ${BRAND()} Admin`;
   sideEl.querySelectorAll('a[data-key]').forEach((a) => a.classList.toggle('on', a.dataset.key === entry[0]));
   refreshBadges();
   try { await VIEWS[entry[0]](sub); } catch (e) {

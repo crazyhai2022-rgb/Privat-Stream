@@ -10,6 +10,9 @@
   --text-3: #71717a;
   --accent: #e8e8e8;
   --tg: #229ed9;
+  --brand-a: #fa025b;
+  --brand-b: #7125fd;
+  --brand-grad: linear-gradient(90deg, var(--brand-a), var(--brand-b));
   --danger: #e5484d;
   --ok: #46a758;
   --warn: #d9a441;
@@ -44,7 +47,10 @@ svg.i.fill { fill: currentColor; }
 /* ---------- Top bar ---------- */
 .topbar { position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h); background: var(--bg); border-bottom: 1px solid var(--line); z-index: 50; display: flex; align-items: center; gap: 12px; padding: 0 14px; }
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; letter-spacing: .2px; white-space: nowrap; }
-.brand svg { width: 26px; height: 26px; }
+.brand svg { width: 26px; height: 26px; border-radius: 7px; }
+.wordmark { font-weight: 800; letter-spacing: -.015em; }
+.wm-x { background: var(--brand-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+@supports not (background-clip: text) { .wm-x { color: var(--brand-a); } }
 .icon-btn { width: 36px; height: 36px; display: inline-grid; place-items: center; border-radius: 50%; color: var(--text); }
 .icon-btn:hover { background: var(--elev); }
 .search { flex: 1; max-width: 520px; margin: 0 auto; display: flex; }
@@ -294,7 +300,7 @@ body.immersive #view { margin-left: var(--side-w); padding-top: var(--topbar-h);
   .only-m { display: inline-grid; }
   .only-d { display: none !important; }
   .topbar { padding: 0 8px; gap: 6px; }
-  .brand span.name { display: none; }
+  .brand .wordmark.name { font-size: 15px; }
   #view { margin-left: 0; }
   .page { padding: 12px 12px 48px; }
   .lgrid, .lgrid.all { grid-template-columns: minmax(0, 1fr); gap: 16px; }

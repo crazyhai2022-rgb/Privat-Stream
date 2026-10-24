@@ -1,5 +1,5 @@
 {
-  "name": "privat-stream-server",
+  "name": "viralx-server",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -30,6 +30,6 @@
   "engines": {
     "node": ">=20"
   },
-  "description": "Privat Stream \u2014 Shorts-first video streaming platform (API, worker and static front-end)",
+  "description": "viralX \u2014 Shorts-first video streaming platform (API, worker and static front-end)",
   "license": "UNLICENSED"
 }

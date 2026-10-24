@@ -70,7 +70,7 @@ describe('injection and object-reference safety', () => {
       '/media/img/avatars/....//....//package.json', '/stream/../package.json']) {
       const res = await rawGet(p);
       assert.ok(!res.includes('root:x:'), `${p} leaked /etc/passwd`);
-      assert.ok(!res.includes('"privat-stream-server"'), `${p} leaked package.json`);
+      assert.ok(!res.includes('"viralx-server"'), `${p} leaked package.json`);
       assert.ok(!res.includes('argon2'), `${p} leaked a server file`);
     }
   });
