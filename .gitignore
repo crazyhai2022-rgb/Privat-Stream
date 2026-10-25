@@ -4,6 +4,7 @@ node_modules/
 server/.env
 server/.data/
 server/storage-data/
-server/tmp/
+server/tmp/*
+!server/tmp/restart.txt
 *.log
 .DS_Store

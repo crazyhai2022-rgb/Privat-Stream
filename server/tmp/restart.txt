@@ -1,0 +1,5 @@
+Touching this file restarts the app under Phusion Passenger (cPanel's "Setup Node.js App").
+
+In cPanel -> File Manager, open viralx/server/tmp/, select restart.txt, choose Edit, then Save.
+Passenger notices the new timestamp and starts a fresh process on the next request, which is
+more reliable than the Restart button when an old process refuses to stop.

@@ -250,5 +250,10 @@ At that point a small VPS (₹400–700/month) is the upgrade —
 
 ## Updating later
 
-cPanel → **Git Version Control** → *Pull*, then *Setup Node.js App* → **Restart**.
-Run **NPM Install** again only when dependencies changed.
+cPanel → **Git Version Control** → *Pull*, then restart the app. Run **NPM Install** again
+only when dependencies changed.
+
+> The **Restart** button does not always stop the old process, which leaves the pages updated
+> but the API running old code. The reliable way is to edit and save
+> `viralx/server/tmp/restart.txt` in File Manager. [`RESTART.md`](RESTART.md) explains how to
+> check which version is actually live.

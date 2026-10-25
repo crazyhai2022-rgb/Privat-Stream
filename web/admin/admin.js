@@ -80,7 +80,9 @@ function setupView() {
       } catch (e2) {
         msg.textContent = e2.status === 404
           ? 'Setup is not available: either an administrator already exists, or the token is wrong or missing.'
-          : e2.message;
+          : e2.status === 401
+            ? 'The server is still running an older version of the app. Restart it in your hosting panel and try again.'
+            : e2.message;
         msg.hidden = false;
         btn.disabled = false;
       }
@@ -94,7 +96,9 @@ function setupView() {
       field('Confirm password', pw2Wrap),
       msg, btn),
     h('p', { class: 'muted small', style: 'text-align:center;margin-top:14px' },
-      'This form disappears once the administrator exists. Delete the token afterwards.')));
+      'Delete the token once the administrator exists. ',
+      h('a', { href: '#', style: 'text-decoration:underline', onclick: (e) => { e.preventDefault(); loginView(); } }, 'Back to log in'),
+      '.')));
   name.focus();
 }
 
@@ -117,7 +121,10 @@ function loginView() {
       } catch (e2) { msg.textContent = e2.message; msg.hidden = false; }
       btn.disabled = false;
     } }, field('Email', email), field('Password', pwWrap), msg, btn),
-    h('p', { class: 'muted small', style: 'text-align:center;margin-top:14px' }, 'Administrator accounts are created with the create-admin script, or through first-time setup.')));
+    h('p', { class: 'muted small', style: 'text-align:center;margin-top:14px' },
+      'No administrator yet? ',
+      h('a', { href: '#', style: 'text-decoration:underline', onclick: (e) => { e.preventDefault(); setupView(); } }, 'First-time setup'),
+      '.')));
   email.focus();
 }
 

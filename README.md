@@ -166,7 +166,7 @@ server/
 web/
   index.html, css/, js/  public site (no build step)
   admin/                 Super Admin panel
-docs/                    hosting, cPanel, API reference, trending, deployment
+docs/                    hosting, cPanel, restarting, API reference, trending, deployment
 deploy/                  VPS setup and static-ffmpeg install scripts
 server/app.cjs           startup file for cPanel's Node.js app (Passenger)
 render.yaml              one-click Render blueprint
