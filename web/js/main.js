@@ -34,6 +34,7 @@ route('/studio/channel', page('channel-edit'));
 route('/studio/earnings', page('earnings'));
 route('/studio/payouts', page('earnings', 'payouts'));
 route('/studio/payments', page('earnings', 'settings'));
+route('/studio/videos', page('studio-videos'));
 route('/studio', page('studio'));
 route('/upload', page('upload'));
 route('/research', page('research'));

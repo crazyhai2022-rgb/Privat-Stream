@@ -6,7 +6,7 @@ import { imageUrl } from './serializers.js';
 export const SORTS = ['trending', 'views', 'hearts', 'dislikes', 'comments', 'shares', 'recent', 'featured'];
 
 const BASE_SELECT = `
-  v.id, v.public_id, v.kind, v.title, v.description, v.tags, v.status, v.error_message,
+  v.id, v.public_id, v.visibility, v.kind, v.title, v.description, v.tags, v.status, v.error_message,
   v.duration_seconds, v.width, v.height, v.featured, v.pinned_rank, v.published_at, v.created_at,
   v.views_count, v.unique_views_count, v.hearts_count, v.dislikes_count, v.comments_count, v.shares_count, v.saves_count,
   v.thumbnail_key, v.playback_key, v.rejected_reason, v.removed_reason,
@@ -53,7 +53,7 @@ export const videoDto = (row, { detail = false, owner = false } = {}) => ({
     saves: row.saves_count,
     ...(owner ? { unique_views: row.unique_views_count } : {}),
   },
-  ...(owner ? { error_message: row.error_message, rejected_reason: row.rejected_reason, removed_reason: row.removed_reason } : {}),
+  ...(owner ? { visibility: row.visibility, error_message: row.error_message, rejected_reason: row.rejected_reason, removed_reason: row.removed_reason } : {}),
 });
 
 function trendingCte(t, paramStart) {
@@ -110,6 +110,7 @@ export async function listVideos({ kind, sort = 'trending', category, q, channel
   const where = [];
   if (!admin) {
     where.push(`v.status = 'published'`);
+    where.push(`v.visibility = 'public'`);
     where.push(`c.status = 'approved'`);
   } else if (status) {
     where.push(`v.status = ${add(status)}`);
@@ -171,7 +172,7 @@ export async function recountVideo(q, videoId) {
 }
 
 export function isPubliclyVisible(row) {
-  return row.status === 'published' && row.channel_status === 'approved';
+  return row.status === 'published' && row.channel_status === 'approved' && row.visibility !== 'private';
 }
 
 export async function trendingScoreFor(videoId) {

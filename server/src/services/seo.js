@@ -43,10 +43,10 @@ async function metaFor(req) {
   let m;
   if ((m = p.match(/^\/(watch|shorts)\/([A-Za-z0-9_-]{6,20})$/))) {
     const v = await db.one(
-      `select v.public_id, v.kind, v.title, v.description, v.tags, v.duration_seconds, v.published_at, v.updated_at, v.views_count, v.thumbnail_key, v.playback_key,
+      `select v.visibility, v.public_id, v.kind, v.title, v.description, v.tags, v.duration_seconds, v.published_at, v.updated_at, v.views_count, v.thumbnail_key, v.playback_key,
               c.name as channel_name, c.handle as channel_handle
          from videos v join channels c on c.id = v.channel_id join users u on u.id = c.user_id
-        where v.public_id = $1 and v.status = 'published' and c.status = 'approved' and u.account_status = 'active'`, [m[2]]);
+        where v.public_id = $1 and v.status = 'published' and v.visibility <> 'private' and c.status = 'approved' and u.account_status = 'active'`, [m[2]]);
     if (!v) return { ...def, title: `Video not available · ${site}`, robots: 'noindex,nofollow', canonical: undefined };
     const path = v.kind === 'short' ? `/shorts/${v.public_id}` : `/watch/${v.public_id}`;
     const url = `${base}${path}`;
@@ -62,7 +62,7 @@ async function metaFor(req) {
       interactionStatistic: { '@type': 'InteractionCounter', interactionType: { '@type': 'WatchAction' }, userInteractionCount: Number(v.views_count) || 0 },
     };
     return {
-      ...def, title: `${v.title} · ${v.channel_name} · ${site}`, description: desc, canonical: url, image, type: 'video.other',
+      ...def, ...(v.visibility === 'unlisted' ? { robots: 'noindex,nofollow' } : {}), title: `${v.title} · ${v.channel_name} · ${site}`, description: desc, canonical: url, image, type: 'video.other',
       extra: jsonLd(ld) + `<meta property="og:video:type" content="video/mp4">`,
       noscript: `<article><h1>${esc(v.title)}</h1><p>${esc(desc)}</p><p>By <a href="${esc(`/c/${v.channel_handle}`)}">${esc(v.channel_name)}</a></p></article>`,
     };
@@ -71,7 +71,7 @@ async function metaFor(req) {
   if ((m = p.match(/^\/c\/([a-z0-9_]{3,30})$/i))) {
     const c = await db.one(
       `select c.name, c.handle, c.bio, c.avatar_key, c.banner_key, c.created_at,
-              (select count(*)::int from videos v where v.channel_id = c.id and v.status = 'published') as videos,
+              (select count(*)::int from videos v where v.channel_id = c.id and v.status = 'published' and v.visibility = 'public') as videos,
               (select count(*)::int from channel_subscriptions s where s.channel_id = c.id) as subscribers
          from channels c join users u on u.id = c.user_id
         where lower(c.handle) = $1 and c.status = 'approved' and u.account_status = 'active'`, [m[1].toLowerCase()]);
@@ -132,13 +132,13 @@ export async function buildSitemap(req) {
   for (const c of await db.query('select slug from categories where is_active order by slug')) urls.push({ loc: `/category/${c.slug}` });
   for (const c of await db.query(
     `select c.handle, max(v.updated_at) as lastmod from channels c join users u on u.id = c.user_id
-       left join videos v on v.channel_id = c.id and v.status = 'published'
+       left join videos v on v.channel_id = c.id and v.status = 'published' and v.visibility = 'public'
       where c.status = 'approved' and u.account_status = 'active' group by c.id order by c.handle limit 20000`)) {
     urls.push({ loc: `/c/${c.handle}`, lastmod: c.lastmod });
   }
   for (const v of await db.query(
     `select v.public_id, v.kind, v.updated_at from videos v join channels c on c.id = v.channel_id join users u on u.id = c.user_id
-      where v.status = 'published' and c.status = 'approved' and u.account_status = 'active'
+      where v.status = 'published' and v.visibility = 'public' and c.status = 'approved' and u.account_status = 'active'
       order by v.published_at desc limit 30000`)) {
     urls.push({ loc: `${v.kind === 'short' ? '/shorts' : '/watch'}/${v.public_id}`, lastmod: v.updated_at });
   }

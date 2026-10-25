@@ -110,7 +110,7 @@ r.get('/me/saved', requireAuth, wrap(async (req, res) => {
             cat.slug as category_slug, cat.name as category_name
        from saved_videos sv join videos v on v.id = sv.video_id join channels c on c.id = v.channel_id
        left join categories cat on cat.id = v.category_id
-      where sv.user_id = $1 and v.status = 'published' and c.status = 'approved' and ($2::text is null or v.kind = $2)
+      where sv.user_id = $1 and v.status = 'published' and v.visibility <> 'private' and c.status = 'approved' and ($2::text is null or v.kind = $2)
       order by sv.created_at desc limit 100`, [req.user.id, kind]);
   res.json({ items: rows.map((v) => videoDto(v)) });
 }));

@@ -110,3 +110,6 @@ audit log. Permissions are enforced per role on the server, never in the client.
 
 Rates and payout rules are edited with `PUT /api/admin/settings/monetization`; every rate change is recorded in the rate history.
 Visitor analytics: `GET /api/admin/analytics/visitors?days=` (permission `analytics`). Recommendation mix: setting `recommendations`.
+
+### Video visibility
+`PATCH /api/videos/:id/visibility` `{ "visibility": "public" | "unlisted" | "private" }` (owner only). `public` is listed everywhere, `unlisted` opens only with the link (not listed, not in the sitemap, `noindex`), `private` is visible only to the creator and staff. Creators see `visibility` on `GET /api/me/videos`. Migration `008_video_visibility.sql`.

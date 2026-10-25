@@ -12,6 +12,6 @@ export function creatorTabs(active) {
 export function studioTabs(active) {
   const t = (key, href, label) => h('a', { href, class: key === active ? 'on' : '', 'aria-current': key === active ? 'page' : null }, label);
   return h('nav', { class: 'tabs studio-tabs', 'aria-label': 'Creator studio' },
-    t('videos', '/studio', 'Videos'), t('overview', '/studio/earnings', 'Earnings'),
+    t('dashboard', '/studio', 'Dashboard'), t('videos', '/studio/videos', 'Videos'), t('overview', '/studio/earnings', 'Earnings'),
     t('payouts', '/studio/payouts', 'Payment history'), t('settings', '/studio/payments', 'Payment settings'));
 }

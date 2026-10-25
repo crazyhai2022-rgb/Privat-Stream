@@ -245,6 +245,15 @@ r.post('/videos/:id/retry', requireAuth, requireUploader, wrap(async (req, res) 
   res.json({ ok: true });
 }));
 
+r.patch('/videos/:id/visibility', requireAuth, wrap(async (req, res) => {
+  const { row } = await ownedVideo(req);
+  if (row.status === 'removed') throw forbidden('This video was removed');
+  const { visibility } = z.object({ visibility: z.enum(['public', 'unlisted', 'private']) }).parse(req.body);
+  await db.query(`update videos set visibility = $2, updated_at = now() where id = $1`, [row.id, visibility]);
+  const v = await getVideoRowByPublicId(row.public_id);
+  res.json({ video: videoDto(v, { detail: true, owner: true }) });
+}));
+
 r.patch('/videos/:id', requireAuth, wrap(async (req, res) => {
   const { row } = await ownedVideo(req);
   if (row.status === 'removed') throw forbidden('This video was removed');

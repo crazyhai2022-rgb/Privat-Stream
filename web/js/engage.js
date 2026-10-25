@@ -94,7 +94,7 @@ export function reportDialog(video, comment) {
 export function telegramButton(tg, cls = '') {
   // Only a valid https://t.me link ever renders; otherwise there is no button at all.
   if (!tg?.url || !/^https:\/\/t\.me\//i.test(tg.url)) return null;
-  return h('a', { class: `btn tg sm ${cls}`, href: tg.url, 'aria-label': 'Join our Telegram', title: 'Join our Telegram', target: '_blank', rel: 'noopener noreferrer nofollow', onclick: (e) => e.stopPropagation() }, icon('send'), 'Telegram');
+  return h('a', { class: `btn tg sm ${cls}`, href: tg.url, 'aria-label': 'Join our Telegram', title: 'Join our Telegram', target: '_blank', rel: 'noopener noreferrer nofollow', onclick: (e) => e.stopPropagation() }, icon('send'), 'Join');
 }
 
 /**
