@@ -1,7 +1,15 @@
 import { h, icon, brandWordmark, $, $$, clear, setTitle } from './util.js';
-import { state, loadConfig, refreshMe, onAuthChange, logout, api } from './api.js';
+import { state, loadConfig, refreshMe, onAuthChange, logout, api, early } from './api.js';
 import { route, setHooks, startRouter, navigate } from './router.js';
 import { avatarEl } from './cards.js';
+
+// Home page: ask for the first feed batch right now, in parallel with config / session, instead of after them.
+if (location.pathname === '/') {
+  for (const u of ['/api/feed/for-you?kind=short&limit=10&exclude=', '/api/feed/for-you?kind=long&limit=5&exclude=']) {
+    const p = api.get(u); p.catch(() => {}); early.set(u, p);
+  }
+  setTimeout(() => early.clear(), 15000);
+}
 
 // Page-view ping for the admin's visitor analytics: pseudonymous, skipped when the browser sends Do Not Track.
 let lastTracked = '';
@@ -35,6 +43,7 @@ route('/studio/earnings', page('earnings'));
 route('/studio/payouts', page('earnings', 'payouts'));
 route('/studio/payments', page('earnings', 'settings'));
 route('/studio/videos', page('studio-videos'));
+route('/studio/upload-defaults', page('upload-defaults'));
 route('/studio', page('studio'));
 route('/upload', page('upload'));
 route('/research', page('research'));

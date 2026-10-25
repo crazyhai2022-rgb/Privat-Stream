@@ -551,3 +551,14 @@ body.immersive #view { margin-left: var(--side-w); padding-top: var(--topbar-h);
   .lcard .badge-dur { font-size: 10.5px; padding: 0 4px; bottom: 4px; right: 4px; }
   .lgrid + .divider { margin: 16px 0 10px !important; }
 }
+
+/* ---- Video previews (hover on desktop, hold/scroll on touch) ---- */
+.pv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 1; border-radius: inherit; }
+.pv.on { opacity: 1; }
+.pv-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; transform: scaleX(0); transform-origin: left; background: var(--brand-grad, #ff2d55); z-index: 3; pointer-events: none; }
+.badge-dur, .scard .scrim-b { z-index: 2; }
+.scard, .lcard .th { -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+@media (prefers-reduced-motion: reduce) { .pv { transition: none; } }
+.pv-bar.wait { transform: scaleX(.35) !important; opacity: .75; animation: pvwait 1s ease-in-out infinite alternate; }
+@keyframes pvwait { from { margin-left: 0; } to { margin-left: 65%; } }
+@media (prefers-reduced-motion: reduce) { .pv-bar.wait { animation: none; } }

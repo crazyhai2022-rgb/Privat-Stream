@@ -1,6 +1,21 @@
 import { h, icon, fmtCount, fmtDur, timeAgo, initials } from './util.js';
 import { navigate } from './router.js';
 
+// Video previews live in their own module that is loaded when the browser is idle, so it never delays the first screen.
+let pvMod = null, pvScheduled = false;
+const pvQueue = [];
+function attachPreview(card, v, host) {
+  if (!v || !v.stream_url || v.playable === false) return card;
+  if (pvMod) { pvMod.attachPreview(card, v, host); return card; }
+  pvQueue.push([card, v, host]);
+  if (!pvScheduled) {
+    pvScheduled = true;
+    const go = () => import('./preview.js').then((m) => { pvMod = m; for (const a of pvQueue.splice(0)) if (a[0].isConnected) m.attachPreview(...a); }).catch(() => {});
+    if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 2500 }); else setTimeout(go, 1500);
+  }
+  return card;
+}
+
 export function avatarEl(channel, cls = '') {
   const label = channel?.name || channel?.handle || '?';
   if (channel?.avatar_url) return h('img', { class: `avatar ${cls}`, src: channel.avatar_url, alt: '', loading: 'lazy' });
@@ -16,17 +31,18 @@ function thumb(v, cls) {
 
 /** ctx: query string (without ?) that tells the Shorts viewer which list to continue with. */
 export function shortCard(v, ctx = '') {
-  return h('a', { class: 'scard', href: `/shorts/${v.id}${ctx ? '?' + ctx : ''}`, title: v.title },
+  const a = h('a', { class: 'scard', href: `/shorts/${v.id}${ctx ? '?' + ctx : ''}`, title: v.title },
     thumb(v),
     v.duration ? h('span', { class: 'badge-dur' }, fmtDur(v.duration)) : null,
     h('div', { class: 'scrim-b' },
       h('div', { class: 't clamp2' }, v.title),
       h('div', { class: 'u' }, '@' + v.channel.handle),
       h('div', { class: 'v' }, `${fmtCount(v.metrics.views)} views`)));
+  return attachPreview(a, v, a);
 }
 
 export function longCard(v) {
-  return h('a', { class: 'lcard', href: `/watch/${v.id}` },
+  const a = h('a', { class: 'lcard', href: `/watch/${v.id}` },
     h('div', { class: 'th' }, thumb(v), v.duration ? h('span', { class: 'badge-dur br' }, fmtDur(v.duration)) : null),
     h('div', { class: 'meta' },
       h('span', { onclick: (e) => { e.preventDefault(); e.stopPropagation(); navigate(`/c/${v.channel.handle}`); } }, avatarEl(v.channel, 'md')),
@@ -35,6 +51,7 @@ export function longCard(v) {
         h('div', { class: 'sub ch' }, `@${v.channel.handle}`),
         // On phones the card stays compact (title, channel, views); the upload date is shown on the watch page.
         h('div', { class: 'sub' }, `${fmtCount(v.metrics.views)} views`, h('span', { class: 'dt' }, ` · ${timeAgo(v.published_at)}`)))));
+  return attachPreview(a, v, a.querySelector('.th'));
 }
 
 export function shortsRail(items, ctx = '') {

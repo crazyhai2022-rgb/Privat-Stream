@@ -20,7 +20,11 @@ function headers(url, extra = {}) {
   return h;
 }
 
+// Requests started before the page code finished loading (see main.js); each is used once.
+export const early = new Map();
+
 async function request(method, url, body) {
+  if (method === 'GET' && early.has(url)) { const p = early.get(url); early.delete(url); return p; }
   const opts = { method, headers: headers(url, body !== undefined ? { 'Content-Type': 'application/json' } : {}), credentials: 'same-origin' };
   if (body !== undefined) opts.body = JSON.stringify(body);
   let res;

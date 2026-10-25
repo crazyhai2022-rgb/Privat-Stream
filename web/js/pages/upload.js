@@ -41,7 +41,7 @@ export function parseTags(text) {
   for (const t of parts) { if (!seen.has(t)) { seen.add(t); out.push(t); } }
   return out;
 }
-const tagProblem = (tags) => {
+export const tagProblem = (tags) => {
   if (tags.length > 10) return 'Use at most 10 hashtags.';
   const bad = tags.find((t) => t.length > 30 || !/^[\p{L}\p{N}_\- ]+$/u.test(t));
   return bad ? `“${bad}” cannot be used as a hashtag. Use letters, numbers, spaces, - or _ (up to 30 characters).` : '';
@@ -56,6 +56,11 @@ async function form({ root, query }, kind) {
   const maxMb = isShort ? lim.short_max_mb : lim.long_max_mb;
   const maxSec = isShort ? lim.short_max_seconds : lim.long_max_seconds;
   const saved = getDraft();
+  // Creator's saved defaults (title, description, hashtags, category). They only fill empty fields and stay fully editable.
+  const noDef = { title: '', description: '', tags: [], category_id: null };
+  let defaults = noDef;
+  try { defaults = (await api.get('/api/me/upload-defaults')).defaults[kind] || noDef; } catch { /* defaults are optional */ }
+  const hasDefaults = !!(defaults.title || defaults.description || defaults.tags.length || defaults.category_id);
   let draftId = query.get('draft') || null;
   let file = null, fileMeta = null, busy = false, previewUrl = null;
 
@@ -85,7 +90,11 @@ async function form({ root, query }, kind) {
     dropText.replaceChildren(h('b', null, f.name), h('div', { class: 'muted small' }, `${(f.size / 1048576).toFixed(1)} MB${meta ? ` · ${fmtDur(meta.d)} · ${meta.w}×${meta.h}` : ''}${restored ? ' · kept from before' : ''}`));
     if (meta && isShort && meta.w > meta.h) fileErr.replaceChildren(h('span', { class: 'muted' }, 'Tip: Shorts look best in portrait 9:16.')), fileErr.hidden = false, fileErr.className = 'hint';
     if (meta && !isShort && meta.h > meta.w) fileErr.replaceChildren(h('span', { class: 'muted' }, 'Tip: long videos look best in landscape 16:9.')), fileErr.hidden = false, fileErr.className = 'hint';
-    if (!title.value) { title.value = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').slice(0, 100); patchDraft({ title: title.value }); }
+    if (!title.value) {
+      const base = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').slice(0, 100);
+      title.value = useDefaults && defaults.title.includes(TOKEN) ? withName(defaults.title, base) : base;
+      patchDraft({ title: title.value });
+    }
     picker.setVideo(f);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     previewUrl = URL.createObjectURL(f);
@@ -93,11 +102,14 @@ async function form({ root, query }, kind) {
   }
   function showFileErr(m) { fileErr.className = 'err'; fileErr.textContent = m; fileErr.hidden = false; }
 
-  const title = h('input', { class: 'input', id: 'vtitle', maxlength: 100, required: true, value: saved.title });
-  const desc = h('textarea', { class: 'textarea', id: 'vdesc', maxlength: isShort ? 500 : 5000, placeholder: isShort ? 'Write a caption…' : 'Describe your video…' }); desc.value = saved.description;
+  const useDefaults = hasDefaults && !draftId;
+  const TOKEN = '{filename}';
+  const withName = (t, name) => t.split(TOKEN).join(name).replace(/\s+/g, ' ').trim().slice(0, 100);
+  const title = h('input', { class: 'input', id: 'vtitle', maxlength: 100, required: true, value: saved.title || (useDefaults && !defaults.title.includes(TOKEN) ? defaults.title : '') });
+  const desc = h('textarea', { class: 'textarea', id: 'vdesc', maxlength: isShort ? 500 : 5000, placeholder: isShort ? 'Write a caption…' : 'Describe your video…' }); desc.value = saved.description || (useDefaults ? defaults.description : '');
   const cat = h('select', { class: 'select', id: 'vcat' }, h('option', { value: '' }, 'Choose a category'), (state.config.categories || []).map((c) => h('option', { value: c.id }, c.name)));
-  cat.value = saved.categoryId || '';
-  const tags = h('input', { class: 'input', id: 'vtags', placeholder: '#hashtag, another hashtag (up to 10)', value: saved.tags, autocapitalize: 'none', spellcheck: 'false' });
+  cat.value = saved.categoryId || (useDefaults ? defaults.category_id || '' : '');
+  const tags = h('input', { class: 'input', id: 'vtags', placeholder: '#hashtag, another hashtag (up to 10)', value: saved.tags || (useDefaults ? defaults.tags.map((t) => '#' + t).join(', ') : ''), autocapitalize: 'none', spellcheck: 'false' });
   const tagErr = h('div', { class: 'err', hidden: true });
   const persist = () => { patchDraft({ title: title.value, description: desc.value, tags: tags.value, categoryId: cat.value, fromResearch: getDraft().fromResearch && true }); renderPreview(); };
   [title, desc, tags].forEach((el) => el.addEventListener('input', persist));
@@ -121,6 +133,28 @@ async function form({ root, query }, kind) {
   const submit = h('button', { class: 'btn primary', type: 'submit', style: 'height:42px' }, 'Upload');
   const cancel = h('button', { class: 'btn', type: 'button', hidden: true, onclick: () => upload.current?.abort() }, 'Cancel upload');
   const done = h('div');
+
+  function applyDefaults() {
+    title.value = defaults.title.includes(TOKEN) ? withName(defaults.title, file ? file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ') : '') : defaults.title;
+    desc.value = defaults.description; cat.value = defaults.category_id || '';
+    tags.value = defaults.tags.map((t) => '#' + t).join(', ');
+    tags.dispatchEvent(new Event('input')); persist();
+  }
+  function defaultsBar() {
+    const msg = h('span', { class: 'muted small' }, hasDefaults ? 'Your default upload settings are filled in. Edit anything for this video.' : 'Tip: save a default title, description and hashtags to reuse them on every upload.');
+    const saveBtn = h('button', { class: 'btn sm', type: 'button', onclick: async (e) => {
+      const b = e.currentTarget; b.disabled = true;
+      try {
+        const body = { title: title.value.trim(), description: desc.value.trim(), tags: parseTags(tags.value), category_id: cat.value || null };
+        const tp = tagProblem(body.tags); if (tp) throw new Error(tp);
+        const r = await api.put('/api/me/upload-defaults', { [kind]: body }); defaults = r.defaults[kind];
+        msg.textContent = 'Saved as your default for this type of upload.'; resetBtn.hidden = false; toast('Saved as default');
+      } catch (er) { toast(er.message || 'Could not save', 'bad'); }
+      b.disabled = false;
+    } }, 'Save these as my defaults');
+    const resetBtn = h('button', { class: 'btn sm', type: 'button', hidden: !hasDefaults, onclick: applyDefaults }, 'Reset to defaults');
+    return h('div', { class: 'notice defaults-bar', style: 'margin-bottom:12px' }, msg, h('div', { class: 'row wrap', style: 'margin-top:8px' }, resetBtn, saveBtn, h('a', { class: 'btn sm', href: '/studio/upload-defaults' }, 'Edit defaults')));
+  }
 
   const f = (label, input, hint) => h('div', { class: 'field' }, h('label', { for: input.id }, label), input, hint ? h('div', { class: 'hint' }, hint) : null);
   const step = (n, label, ...kids) => h('section', { class: 'ustep' }, h('h2', { class: 'ustep-h' }, h('span', { class: 'ustep-n' }, String(n)), label), ...kids);
@@ -178,7 +212,7 @@ async function form({ root, query }, kind) {
   frm.append(
     fileInput,
     step(1, isShort ? 'Choose your Short' : 'Choose your video', drop, fileErr),
-    step(2, 'Details', f('Title', title), f(isShort ? 'Caption' : 'Description', desc), f('Category', cat), f('Hashtags', tags, 'Separate with commas. The # is optional. Helps people find your video.'), tagErr),
+    step(2, 'Details', defaultsBar(), f('Title', title), f(isShort ? 'Caption' : 'Description', desc), f('Category', cat), f('Hashtags', tags, 'Separate with commas. The # is optional. Helps people find your video.'), tagErr),
     step(3, 'Thumbnail', picker.el),
     step(4, 'Preview & upload', prevHost, h('p', { class: 'muted small' }, 'New uploads follow the platform’s review rules. Nothing is published until you press Upload.'),
       progress, statusLine, err, done, h('div', { class: 'row' }, submit, cancel, h('a', { class: 'btn', href: '/upload' }, 'Back'))));

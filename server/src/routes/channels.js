@@ -222,4 +222,53 @@ r.delete('/channels/:handle/subscribe', requireAuth, wrap(async (req, res) => {
   res.json(await subscriptionState(ch.id, req.user.id));
 }));
 
+// ---------- Default upload settings (pre-filled in the upload form; always editable per video) ----------
+const defTags = z.array(z.string().trim().toLowerCase().min(1).max(30).regex(/^[\p{L}\p{N}_\- ]+$/u, 'Hashtags may only contain letters, numbers, spaces, - and _')).max(10)
+  .transform((a) => [...new Set(a)]);
+const defKind = (maxDesc) => z.object({
+  title: z.string().trim().max(100).default(''),
+  description: z.string().trim().max(maxDesc).default(''),
+  tags: defTags.default([]),
+  category_id: z.string().uuid().nullable().optional(),
+}).strict();
+const defaultsSchema = z.object({ long: defKind(5000).optional(), short: defKind(500).optional() }).strict();
+const emptyDef = () => ({ title: '', description: '', tags: [], category_id: null });
+
+async function readDefaults(userId) {
+  const row = await db.one('select value from creator_upload_defaults where user_id = $1', [userId]);
+  const v = row?.value || {};
+  const out = { long: { ...emptyDef(), ...(v.long || {}) }, short: { ...emptyDef(), ...(v.short || {}) } };
+  const ids = [out.long.category_id, out.short.category_id].filter(Boolean);
+  if (ids.length) {
+    const ok = new Set((await db.query('select id from categories where id = any($1::uuid[]) and is_active', [ids])).map((c) => c.id));
+    for (const k of ['long', 'short']) if (out[k].category_id && !ok.has(out[k].category_id)) out[k].category_id = null;
+  }
+  return out;
+}
+
+r.get('/me/upload-defaults', requireAuth, wrap(async (req, res) => {
+  res.json({ defaults: await readDefaults(req.user.id) });
+}));
+
+r.put('/me/upload-defaults', requireAuth, wrap(async (req, res) => {
+  const parsed = defaultsSchema.safeParse(req.body || {});
+  if (!parsed.success) throw badRequest(parsed.error.issues[0]?.message || 'Invalid default upload settings');
+  const body = parsed.data;
+  const cur = await readDefaults(req.user.id);
+  for (const k of ['long', 'short']) {
+    if (!body[k]) continue;
+    const next = { ...emptyDef(), ...body[k], category_id: body[k].category_id || null };
+    if (next.category_id && !(await db.one('select 1 from categories where id = $1 and is_active', [next.category_id]))) throw badRequest('Choose a valid category');
+    cur[k] = next;
+  }
+  await db.query(`insert into creator_upload_defaults (user_id, value, updated_at) values ($1, $2::jsonb, now())
+    on conflict (user_id) do update set value = excluded.value, updated_at = now()`, [req.user.id, JSON.stringify(cur)]);
+  res.json({ defaults: cur });
+}));
+
+r.delete('/me/upload-defaults', requireAuth, wrap(async (req, res) => {
+  await db.query('delete from creator_upload_defaults where user_id = $1', [req.user.id]);
+  res.json({ defaults: await readDefaults(req.user.id) });
+}));
+
 export default r;

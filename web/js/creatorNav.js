@@ -13,5 +13,5 @@ export function studioTabs(active) {
   const t = (key, href, label) => h('a', { href, class: key === active ? 'on' : '', 'aria-current': key === active ? 'page' : null }, label);
   return h('nav', { class: 'tabs studio-tabs', 'aria-label': 'Creator studio' },
     t('dashboard', '/studio', 'Dashboard'), t('videos', '/studio/videos', 'Videos'), t('overview', '/studio/earnings', 'Earnings'),
-    t('payouts', '/studio/payouts', 'Payment history'), t('settings', '/studio/payments', 'Payment settings'));
+    t('payouts', '/studio/payouts', 'Payment history'), t('settings', '/studio/payments', 'Payment settings'), t('defaults', '/studio/upload-defaults', 'Upload defaults'));
 }
