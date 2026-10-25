@@ -23,6 +23,9 @@ route('/forgot-password', page('auth', 'forgot'));
 route('/reset-password', page('auth', 'reset'));
 route('/channel/setup', page('channel-edit'));
 route('/studio/channel', page('channel-edit'));
+route('/studio/earnings', page('earnings'));
+route('/studio/payouts', page('earnings', 'payouts'));
+route('/studio/payments', page('earnings', 'settings'));
 route('/studio', page('studio'));
 route('/upload', page('upload'));
 route('/upload/short', page('upload', 'short'));
@@ -52,7 +55,7 @@ function markActive(path) {
     const k = a.dataset.nav;
     let on;
     if (k === '/') on = path === '/';
-    else if (k === 'channel') on = path === '/studio' || path.startsWith('/c/') || path === '/channel/setup' || path === '/studio/channel';
+    else if (k === 'channel') on = path === '/studio' || path.startsWith('/studio/') || path.startsWith('/c/') || path === '/channel/setup' || path === '/studio/channel';
     else if (k === '/categories') on = path.startsWith('/categor');
     else if (k === '/upload') on = path.startsWith('/upload');
     else if (k === '/long') on = path === '/long' || path.startsWith('/watch');
@@ -86,6 +89,7 @@ function userArea() {
     h('hr'),
     h('a', { href: myChannelHref() }, icon('user'), 'My channel'),
     h('a', { href: '/studio' }, icon('film'), 'Creator studio'),
+    state.channel?.status === 'approved' ? h('a', { href: '/studio/earnings' }, icon('sliders'), 'Earnings & payments') : null,
     h('a', { href: '/saved' }, icon('bookmark'), 'Saved videos'),
     h('a', { href: '/settings' }, icon('sliders'), 'Settings'),
     h('hr'),

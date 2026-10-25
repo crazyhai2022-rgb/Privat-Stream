@@ -9,6 +9,7 @@ import channelRoutes from './routes/channels.js';
 import videoRoutes from './routes/videos.js';
 import engagementRoutes from './routes/engagement.js';
 import adminRoutes from './routes/admin.js';
+import earningsRoutes from './routes/earnings.js';
 import { api as publicApi, media } from './routes/public.js';
 import { db } from './db/index.js';
 
@@ -55,6 +56,7 @@ export function createApp() {
   app.use('/api/admin', adminRoutes);
   app.use('/api', publicApi);
   app.use('/api', channelRoutes);
+  app.use('/api', earningsRoutes);
   app.use('/api', videoRoutes);
   app.use('/api', engagementRoutes);
 

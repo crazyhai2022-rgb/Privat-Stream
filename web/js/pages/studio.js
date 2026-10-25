@@ -34,6 +34,7 @@ export default async function studio({ root }) {
     ch.status_reason ? h('p', { class: 'muted', style: 'margin-top:4px' }, `Reason: ${ch.status_reason}`) : null,
     h('div', { class: 'row wrap', style: 'margin-top:10px' },
       ch.status === 'approved' ? h('a', { class: 'btn primary sm', href: '/upload' }, icon('upload'), 'Upload') : null,
+      ch.status === 'approved' ? h('a', { class: 'btn sm', href: '/studio/earnings' }, 'Earnings & payments') : null,
       h('a', { class: 'btn sm', href: '/studio/channel' }, icon('edit'), ch.status === 'rejected' ? 'Edit & resubmit' : 'Edit channel'),
       ch.status === 'approved' ? h('a', { class: 'btn sm', href: `/c/${ch.handle}` }, 'View channel') : null)));
 
