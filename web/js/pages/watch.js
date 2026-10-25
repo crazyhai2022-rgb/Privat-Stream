@@ -63,9 +63,9 @@ export default async function watch({ root, params }) {
     if (viewBtn) viewBtn.textContent = `${commentsOpen ? 'Hide' : 'View'} Comments (${fmtCount(v.metrics.comments)})`;
   }
 
-  const sbar = subscribeBar(v.channel, { subscribers: 0, subscribed: false }, { telegram: v.telegram, isOwner: state.channel?.handle === v.channel.handle });
+  const sbar = subscribeBar(v.channel, { subscribers: 0, subscribed: false }, { telegram: v.telegram, isOwner: state.channel?.handle === v.channel.handle, ownerDisabled: true });
   api.get(`/api/channels/${v.channel.handle}/subscription`).then((info) => {
-    const fresh = subscribeBar(v.channel, info, { telegram: v.telegram, isOwner: state.channel?.handle === v.channel.handle });
+    const fresh = subscribeBar(v.channel, info, { telegram: v.telegram, isOwner: state.channel?.handle === v.channel.handle, ownerDisabled: true });
     sbar.el.replaceWith(fresh.el); sbar.countEl.replaceWith(fresh.countEl);
   }).catch(() => {});
   main.append(h('div', { class: 'wmeta' },

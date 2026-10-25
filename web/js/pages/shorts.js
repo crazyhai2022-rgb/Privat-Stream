@@ -285,7 +285,7 @@ export default async function shorts({ root, params, query }) {
       const mine = state.channel?.handle === node.v.channel.handle;
       let info = { subscribers: 0, subscribed: false };
       try { info = await api.get(`/api/channels/${node.v.channel.handle}/subscription`); } catch { /* show the bar anyway */ }
-      node.who.append(subscribeBar(node.v.channel, info, { telegram: m.telegram, isOwner: mine }).el);
+      node.who.append(subscribeBar(node.v.channel, info, { telegram: m.telegram, isOwner: mine, ownerDisabled: true }).el);
       refresh(node);
     } catch { node.detail = false; }
   }

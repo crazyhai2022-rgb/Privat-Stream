@@ -515,3 +515,19 @@ body.immersive #view { margin-left: var(--side-w); padding-top: var(--topbar-h);
 .sv-info.open { background: linear-gradient(to top, rgba(0,0,0,.92) 55%, rgba(0,0,0,0)); }
 .sv-info .cap .more .cat { margin-top: 10px; }
 @media (prefers-reduced-motion: reduce) { .sv-info .cap .more, .sv-info .cap .chev { transition: none; } }
+
+/* One line everywhere: [avatar @handle] [Subscribe] [Telegram]. The handle shrinks first, the buttons never wrap. */
+.btn.subscribe.own { opacity: .5; }
+.sv-info .who { flex-wrap: nowrap; gap: 8px; min-width: 0; }
+.sv-info .who > a.row { flex: 1 1 auto; min-width: 0; }
+.sv-info .who .un { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.sv-info .who .avatar.md { width: 34px; height: 34px; }
+.sv-info .chactions { flex: none; flex-wrap: nowrap; gap: 6px; width: auto; }
+.sv-info .btn.subscribe, .sv-info .btn.tg.pill { height: 30px; padding: 0 12px; font-size: 12.5px; white-space: nowrap; }
+@media (max-width: 360px) {
+  .sv-info .who { gap: 6px; }
+  .sv-info .who .avatar.md { width: 28px; height: 28px; }
+  .sv-info .who .un { font-size: 12.5px; }
+  .sv-info .btn.subscribe, .sv-info .btn.tg.pill { height: 28px; padding: 0 9px; font-size: 12px; }
+  .sv-info .btn.tg.pill { gap: 4px; }
+}

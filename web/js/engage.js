@@ -94,7 +94,7 @@ export function reportDialog(video, comment) {
 export function telegramButton(tg, cls = '') {
   // Only a valid https://t.me link ever renders; otherwise there is no button at all.
   if (!tg?.url || !/^https:\/\/t\.me\//i.test(tg.url)) return null;
-  return h('a', { class: `btn tg sm ${cls}`, href: tg.url, target: '_blank', rel: 'noopener noreferrer nofollow', onclick: (e) => e.stopPropagation() }, icon('send'), 'Join Telegram');
+  return h('a', { class: `btn tg sm ${cls}`, href: tg.url, 'aria-label': 'Join our Telegram', title: 'Join our Telegram', target: '_blank', rel: 'noopener noreferrer nofollow', onclick: (e) => e.stopPropagation() }, icon('send'), 'Telegram');
 }
 
 /**
@@ -102,7 +102,7 @@ export function telegramButton(tg, cls = '') {
  * The UI updates at once and rolls back if the request fails.
  * `info` is { subscribers, subscribed } and is_owner hides the subscribe action.
  */
-export function subscribeBar(channel, info, { telegram, isOwner = false, onCount } = {}) {
+export function subscribeBar(channel, info, { telegram, isOwner = false, ownerDisabled = false, onCount } = {}) {
   let subscribed = !!info?.subscribed, count = Number(info?.subscribers || 0), busy = false;
   const countEl = h('span', { class: 'muted small sub-count' });
   const btn = h('button', { class: 'btn subscribe', type: 'button' });
@@ -114,6 +114,7 @@ export function subscribeBar(channel, info, { telegram, isOwner = false, onCount
     onCount?.(count);
   };
   btn.addEventListener('click', async () => {
+    if (isOwner) { toast('This is your channel'); return; }
     if (!state.user) { navigate(`/login?next=${encodeURIComponent(location.pathname)}`); return; }
     if (busy) return;
     busy = true;
@@ -129,7 +130,11 @@ export function subscribeBar(channel, info, { telegram, isOwner = false, onCount
   });
   paint();
   const tg = telegramButton(telegram, 'pill');
-  const el = h('div', { class: 'chactions' }, isOwner ? null : btn, tg);
+  // On your own videos the button is shown greyed out (so the row looks the same everywhere) instead of vanishing.
+  if (isOwner && ownerDisabled) {
+    btn.classList.add('own'); btn.setAttribute('aria-disabled', 'true'); btn.title = 'This is your channel';
+  }
+  const el = h('div', { class: 'chactions' }, isOwner && !ownerDisabled ? null : btn, tg);
   return { el, countEl };
 }
 
