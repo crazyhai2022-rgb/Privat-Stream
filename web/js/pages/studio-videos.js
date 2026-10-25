@@ -1,4 +1,4 @@
-import { h, icon, setTitle, toast, fmtCount, timeAgo, statusPill, confirmDialog, openModal } from '../util.js';
+import { h, icon, setTitle, toast, fmtCount, fmtDur, timeAgo, statusPill, confirmDialog, openModal } from '../util.js';
 import { api, state, refreshMe, upload } from '../api.js';
 import { navigate } from '../router.js';
 import { emptyState } from '../cards.js';
@@ -63,6 +63,7 @@ export default async function studio({ root }) {
     try { items = (await api.get('/api/me/videos')).items; all = items; } catch (e) { list.replaceChildren(h('p', { class: 'err' }, e.message)); return; }
     if (destroyed) return;
     paintFilters(); render();
+    backfillDurations(items);
     clearTimeout(timer);
     if (items.some((v) => ['uploading', 'processing'].includes(v.status))) timer = setTimeout(loadVideos, 3000);
   }
@@ -78,7 +79,7 @@ export default async function studio({ root }) {
         v.status === 'pending_moderation' ? h('div', { class: 'muted small' }, 'Waiting for moderator approval.') : null,
         h('div', { class: 'mets', style: 'margin-top:6px' },
           ['views', 'unique_views', 'hearts', 'dislikes', 'comments', 'shares', 'saves'].map((k) => h('span', null, h('b', null, fmtCount(v.metrics[k] ?? 0)), ' ', k.replace('_', ' ')))),
-        h('div', { class: 'muted small', style: 'margin-top:4px' }, `Created ${timeAgo(v.created_at)}`),
+        h('div', { class: 'muted small', style: 'margin-top:4px' }, `Created ${timeAgo(v.created_at)}${v.duration ? ' · ' + fmtDur(v.duration) : ''}`),
         h('div', { class: 'row wrap', style: 'margin-top:8px' },
           visibilitySelect(v),
           h('button', { class: 'btn sm', onclick: () => edit(v) }, icon('edit'), 'Edit'),
@@ -86,6 +87,24 @@ export default async function studio({ root }) {
           v.status === 'draft' ? h('a', { class: 'btn sm', href: `/upload/${v.kind}?draft=${v.id}` }, icon('upload'), 'Upload file') : null,
           v.status === 'draft' && v.error_message ? h('button', { class: 'btn sm', onclick: () => retry(v) }, icon('refresh'), 'Retry processing') : null,
           h('button', { class: 'btn sm danger', onclick: () => remove(v) }, icon('trash'), 'Delete'))));
+  }
+
+  // Older uploads (made on a server without ffprobe) have no length; read it from the file in the browser and save it once.
+  const probed = new Set();
+  function backfillDurations(items) {
+    for (const v of items) {
+      if (v.duration || !v.stream_url || v.playable === false || probed.has(v.id) || ['draft', 'uploading', 'processing', 'removed'].includes(v.status)) continue;
+      probed.add(v.id);
+      const el = document.createElement('video'); el.preload = 'metadata'; el.muted = true;
+      const done = () => { el.removeAttribute('src'); el.load(); };
+      el.onloadedmetadata = async () => {
+        const d = el.duration; done();
+        if (!(d > 0.5) || !isFinite(d) || destroyed) return;
+        try { await api.patch(`/api/videos/${v.id}/duration`, { seconds: d }); loadVideos(); } catch { /* ignore */ }
+      };
+      el.onerror = done;
+      el.src = v.stream_url;
+    }
   }
 
   function visibilitySelect(v) {

@@ -152,10 +152,15 @@ async function uploadHandler(req, res) {
     if (thumb) {
       try { thumbKey = await storeThumbnail(thumb, row.kind, storage); } catch (e) { await fail(e.message); }
     }
+    // The browser reads the length from the file itself, so videos show their duration even on servers without ffprobe.
+    const hint = z.object({ duration: z.coerce.number().min(0.5).max(36000), width: z.coerce.number().int().min(1).max(10000).optional(), height: z.coerce.number().int().min(1).max(10000).optional() })
+      .safeParse(req.body || {});
+    const dur = hint.success ? hint.data : {};
     await db.query(
       `update videos set original_key = $2, mime = $3, size_bytes = $4, thumbnail_key = coalesce($5, thumbnail_key),
-              custom_thumbnail = $6, status = 'processing', error_message = null, updated_at = now() where id = $1`,
-      [row.id, origKey, kind.mime, video.size, thumbKey, !!thumbKey],
+              custom_thumbnail = $6, duration_seconds = coalesce($7::numeric, duration_seconds), width = coalesce($8::int, width), height = coalesce($9::int, height),
+              status = 'processing', error_message = null, updated_at = now() where id = $1`,
+      [row.id, origKey, kind.mime, video.size, thumbKey, !!thumbKey, dur.duration ?? null, dur.width ?? null, dur.height ?? null],
     );
     await enqueueProcessing(row.id);
   } catch (e) {
@@ -242,6 +247,17 @@ r.post('/videos/:id/retry', requireAuth, requireUploader, wrap(async (req, res) 
   if (row.status !== 'draft' || !row.original_key) throw conflict('Nothing to retry; please upload the file again', 'cannot_retry');
   await db.query(`update videos set status = 'processing', error_message = null, updated_at = now() where id = $1`, [row.id]);
   await enqueueProcessing(row.id);
+  res.json({ ok: true });
+}));
+
+// Fills in a missing length (older uploads made without ffprobe). Only the owner, and only while it is unknown.
+r.patch('/videos/:id/duration', requireAuth, wrap(async (req, res) => {
+  const { row } = await ownedVideo(req);
+  const { seconds } = z.object({ seconds: z.number().min(0.5).max(36000) }).parse(req.body);
+  if (row.duration_seconds === null || row.duration_seconds === undefined) {
+    const max = (await getSetting('upload'))[row.kind === 'short' ? 'short_max_seconds' : 'long_max_seconds'];
+    await db.query(`update videos set duration_seconds = $2, updated_at = now() where id = $1`, [row.id, Math.min(seconds, max + 1)]);
+  }
   res.json({ ok: true });
 }));
 

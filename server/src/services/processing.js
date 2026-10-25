@@ -88,7 +88,7 @@ async function processVideo(job) {
     const autoPublish = !mod.require_video_moderation && channel?.channel_status === 'approved' && channel?.account_status === 'active';
 
     await db.query(
-      `update videos set playback_key = $2, thumbnail_key = $3, mime = $4, duration_seconds = $5, width = $6, height = $7,
+      `update videos set playback_key = $2, thumbnail_key = $3, mime = $4, duration_seconds = coalesce($5, duration_seconds), width = coalesce($6, width), height = coalesce($7, height),
               status = $8, published_at = case when $8 = 'published' then now() else published_at end,
               error_message = null, updated_at = now()
         where id = $1 and status = 'processing'`,

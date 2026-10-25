@@ -57,7 +57,7 @@ async function form({ root, query }, kind) {
   const maxSec = isShort ? lim.short_max_seconds : lim.long_max_seconds;
   const saved = getDraft();
   let draftId = query.get('draft') || null;
-  let file = null, busy = false, previewUrl = null;
+  let file = null, fileMeta = null, busy = false, previewUrl = null;
 
   const picker = thumbnailPicker({ kind, initial: draftFiles.fileKind === kind ? draftFiles.thumb : null, onChange: (r) => { draftFiles.thumb = r; draftFiles.fileKind = kind; renderPreview(); } });
 
@@ -81,7 +81,7 @@ async function form({ root, query }, kind) {
     const meta = await new Promise((res) => { v.onloadedmetadata = () => res({ d: v.duration, w: v.videoWidth, h: v.videoHeight }); v.onerror = () => res(null); setTimeout(() => res(null), 4000); });
     URL.revokeObjectURL(url);
     if (meta && meta.d > maxSec + 0.5) return showFileErr(`This video is ${fmtDur(meta.d)} long. The limit is ${isShort ? maxSec + ' seconds' : fmtDur(maxSec)}.`);
-    file = f; draftFiles.file = f; draftFiles.fileKind = kind;
+    fileMeta = meta; file = f; draftFiles.file = f; draftFiles.fileKind = kind;
     dropText.replaceChildren(h('b', null, f.name), h('div', { class: 'muted small' }, `${(f.size / 1048576).toFixed(1)} MB${meta ? ` · ${fmtDur(meta.d)} · ${meta.w}×${meta.h}` : ''}${restored ? ' · kept from before' : ''}`));
     if (meta && isShort && meta.w > meta.h) fileErr.replaceChildren(h('span', { class: 'muted' }, 'Tip: Shorts look best in portrait 9:16.')), fileErr.hidden = false, fileErr.className = 'hint';
     if (meta && !isShort && meta.h > meta.w) fileErr.replaceChildren(h('span', { class: 'muted' }, 'Tip: long videos look best in landscape 16:9.')), fileErr.hidden = false, fileErr.className = 'hint';
@@ -140,6 +140,7 @@ async function form({ root, query }, kind) {
         draftId = r.video.id;
       }
       const fd = new FormData(); fd.append('video', file);
+      if (fileMeta?.d > 0 && isFinite(fileMeta.d)) { fd.append('duration', String(fileMeta.d)); if (fileMeta.w) fd.append('width', String(fileMeta.w)); if (fileMeta.h) fd.append('height', String(fileMeta.h)); }
       const tb = picker.getBlob(); if (tb) fd.append('thumbnail', tb, 'thumbnail.jpg');
       statusLine.textContent = 'Uploading… 0%';
       await upload(`/api/videos/${draftId}/upload`, fd, { onProgress: (p) => { bar.style.width = `${Math.round(p * 100)}%`; progress.setAttribute('aria-valuenow', String(Math.round(p * 100))); statusLine.textContent = `Uploading… ${Math.round(p * 100)}%`; } });

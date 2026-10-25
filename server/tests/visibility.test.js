@@ -1,6 +1,6 @@
 import test, { after, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { client, makeCreator, makeUser, uploadVideo, publish, shutdown } from './helpers.js';
+import { client, db, makeCreator, makeUser, uploadVideo, publish, shutdown } from './helpers.js';
 
 after(shutdown);
 
@@ -43,5 +43,19 @@ describe('video visibility', () => {
     assert.notEqual((await other.client.patch(`/api/videos/${id}/visibility`, { visibility: 'private' })).status, 200);
     assert.equal((await client().patch(`/api/videos/${id}/visibility`, { visibility: 'private' })).status, 401);
     assert.equal((await owner.client.patch(`/api/videos/${id}/visibility`, { visibility: 'secret' })).status, 400);
+  });
+
+  test('owner can fill in a missing duration once', async () => {
+    const owner = await makeCreator();
+    const id = await uploadVideo(owner);
+    await publish(id);
+    await db.query(`update videos set duration_seconds = null where public_id = $1`, [id]);
+    const other = await makeCreator();
+    assert.notEqual((await other.client.patch(`/api/videos/${id}/duration`, { seconds: 99 })).status, 200);
+    assert.equal((await owner.client.patch(`/api/videos/${id}/duration`, { seconds: 61.4 })).status, 200);
+    assert.equal(Number((await owner.client.get(`/api/videos/${id}`)).body.video.duration), 61.4);
+    await owner.client.patch(`/api/videos/${id}/duration`, { seconds: 5 });   // already known: ignored
+    assert.equal(Number((await owner.client.get(`/api/videos/${id}`)).body.video.duration), 61.4);
+    assert.equal((await owner.client.patch(`/api/videos/${id}/duration`, { seconds: 0 })).status, 400);
   });
 });
