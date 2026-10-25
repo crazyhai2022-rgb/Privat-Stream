@@ -24,6 +24,7 @@ export default async function shorts({ root, params, query }) {
   const items = [];
   let active = -1, page = 0, hasMore = true, loadingMore = false, destroyed = false;
   const timers = new Map();
+  let stalls = 0, syncingMute = false;
 
   // ---------- data ----------
   // The default feed is "For you" (a mix of what you watch, what is new and something different).
@@ -76,9 +77,12 @@ export default async function shorts({ root, params, query }) {
     const landscape = v.width && v.height && v.width / v.height > 0.75;
     if (landscape) video.classList.add('contain');
     const progressBar = h('i');
+    const bufferBar = h('i', { class: 'buf' });
     const progress = h('div', { class: 'sv-progress', role: 'slider', 'aria-label': 'Video progress', 'aria-valuemin': 0, 'aria-valuemax': 100, tabindex: '0',
-      onclick: (e) => { const r = progress.getBoundingClientRect(); if (video.duration) video.currentTime = ((e.clientX - r.left) / r.width) * video.duration; } }, progressBar);
+      onclick: (e) => { const r = progress.getBoundingClientRect(); if (video.duration) video.currentTime = ((e.clientX - r.left) / r.width) * video.duration; } }, bufferBar, progressBar);
     const flash = h('div', { class: 'sv-flash' }, icon('pause', 'fill'));
+    const soundBtn = h('button', { class: 'sv-sound', hidden: !muted, 'aria-label': 'Turn sound on', onclick: (e) => { e.stopPropagation(); setMuted(false); } }, icon('mute'), 'Tap for sound');
+    const spinner = h('div', { class: 'sv-spin', role: 'status', 'aria-label': 'Buffering', hidden: true }, h('i'));
     // One tap/click toggles play; a quick second one on the left or right third seeks 10 seconds
     // back or forward (and further quick taps keep seeking), like the big video apps.
     const seekL = h('div', { class: 'sv-seek left', 'aria-hidden': 'true' }, h('span', null, '−10s'));
@@ -123,16 +127,56 @@ export default async function shorts({ root, params, query }) {
       h('div', { class: 'row', style: 'gap:8px' }, h('a', { class: 'sv-pill', href: '/', 'aria-label': 'Home' }, icon('home')), sortSel),
       h('div', { class: 'row', style: 'gap:8px' }, muteBtn, moreBtn));
 
-    const stage = h('div', { class: 'sv-stage' }, video, tap, seekL, seekR, flash, top, info, progress);
+    const stage = h('div', { class: 'sv-stage' }, video, tap, seekL, seekR, spinner, soundBtn, flash, top, info, progress);
     const sheet = h('div', { class: 'sv-sheet', hidden: true, role: 'dialog', 'aria-label': 'Comments' });
     stage.append(sheet);
     const el = h('section', { class: 'sv-item', dataset: { id: v.id } }, stage, actions);
 
-    Object.assign(node, { el, video, stage, progressBar, flash, heart, dis, com, sha, sav, who, muteBtn, sheet, tap });
+    Object.assign(node, { el, video, stage, progressBar, bufferBar, spinner, soundBtn, flash, heart, dis, com, sha, sav, who, muteBtn, sheet, tap });
     video.addEventListener('timeupdate', () => {
       if (video.duration) { const pct = (video.currentTime / video.duration) * 100; progressBar.style.width = pct + '%'; progress.setAttribute('aria-valuenow', String(Math.round(pct))); }
     });
-    video.addEventListener('error', () => { node.error = true; });
+    // ---- Buffering feedback: the spinner appears only if playback has really stalled for 300 ms,
+    // so quick seeks and normal starts do not flicker. The pale bar shows how much is already buffered.
+    let spinTimer = null;
+    node.showSpin = () => {
+      if (spinTimer || !spinner.hidden) return;
+      spinTimer = setTimeout(() => { spinTimer = null; if (!video.paused && video.readyState < 3) spinner.hidden = false; }, 300);
+    };
+    const hideSpin = () => { clearTimeout(spinTimer); spinTimer = null; spinner.hidden = true; };
+    const stalled = () => { if (nodes[active] === node && !video.paused) { if (video.readyState < 3) stalls++; node.showSpin(); } };
+    video.addEventListener('waiting', stalled);
+    video.addEventListener('stalled', stalled);
+    for (const ev of ['playing', 'canplay', 'seeked', 'pause', 'emptied']) video.addEventListener(ev, hideSpin);
+    const drawBuffer = () => {
+      if (!video.duration) return;
+      let end = 0;
+      for (let k = 0; k < video.buffered.length; k++) if (video.buffered.start(k) <= video.currentTime + 0.5) end = Math.max(end, video.buffered.end(k));
+      bufferBar.style.width = Math.min(100, (end / video.duration) * 100) + '%';
+    };
+    video.addEventListener('progress', drawBuffer);
+    video.addEventListener('timeupdate', drawBuffer);
+    video.addEventListener('playing', () => { node.retries = 0; node.error = false; });
+
+    // ---- Recovery: a dropped connection retries with a growing delay, resuming where it stopped.
+    video.addEventListener('error', () => {
+      node.error = true;
+      if (!video.getAttribute('src') || (node.retries || 0) >= 3 || destroyed) { hideSpin(); return; }
+      node.retries = (node.retries || 0) + 1;
+      const at = video.currentTime || 0;
+      if (nodes[active] === node) { spinner.hidden = false; }
+      setTimeout(() => {
+        if (destroyed || !video.getAttribute('src')) return;
+        video.load();
+        video.addEventListener('loadedmetadata', () => { if (at) video.currentTime = at; if (nodes[active] === node) video.play().catch(() => {}); }, { once: true });
+      }, 600 * 2 ** (node.retries - 1));
+    });
+
+    // ---- Volume: the browser reports volume changes made through its own controls; treat them as "turn sound on".
+    video.addEventListener('volumechange', () => {
+      if (syncingMute) return;
+      if (!video.muted && muted) setMuted(false);
+    });
     refresh(node);
     return node;
   }
@@ -164,11 +208,33 @@ export default async function shorts({ root, params, query }) {
   // ---------- playback ----------
   function setMuted(m) {
     muted = m;
-    nodes.forEach((n) => { n.video.muted = m; const old = n.muteBtn.firstChild; n.muteBtn.replaceChild(icon(m ? 'mute' : 'volume'), old); });
+    syncingMute = true;
+    nodes.forEach((n) => {
+      n.video.muted = m;
+      if (!m && n.video.volume === 0) n.video.volume = 1;
+      n.soundBtn.hidden = !m;
+      const old = n.muteBtn.firstChild; n.muteBtn.replaceChild(icon(m ? 'mute' : 'volume'), old);
+    });
+    setTimeout(() => { syncingMute = false; }, 0);
+  }
+  // How much to load ahead depends on the connection: nothing extra on Data Saver / 2G or after repeated stalls.
+  function netTier() {
+    const c = navigator.connection;
+    if (stalls >= 3 || c?.saveData || /(^|slow-)2g/.test(c?.effectiveType || '')) return 'low';
+    if (c?.effectiveType === '4g' && (c.downlink || 10) >= 5) return 'high';
+    return 'mid';
+  }
+  function preloadAhead(i) {
+    const tier = netTier();
+    const next = nodes[i + 1], after = nodes[i + 2];
+    if (next) ensureSrc(next, tier === 'low' ? 'metadata' : 'auto');
+    if (after) ensureSrc(after, tier === 'high' ? 'auto' : 'metadata');
+    return tier === 'low' ? 2 : 3;
   }
   function ensureSrc(node, preload = 'metadata') {
     if (!node.v.stream_url) return;
     if (!node.video.getAttribute('src')) node.video.src = node.v.stream_url;
+    else if (node.error && node.video.error) { node.error = false; node.retries = 0; node.video.load(); }
     node.video.preload = preload;
   }
   function release(node) {
@@ -177,6 +243,7 @@ export default async function shorts({ root, params, query }) {
   async function playNode(node) {
     ensureSrc(node, 'auto');
     node.video.muted = muted;
+    if (node.video.readyState < 3) node.showSpin?.();
     try { await node.video.play(); } catch {
       if (!node.video.muted) { setMuted(true); try { await node.video.play(); } catch { /* user will tap */ } }
     }
@@ -210,8 +277,8 @@ export default async function shorts({ root, params, query }) {
     active = i;
     const node = nodes[i];
     playNode(node);
-    ensureSrc(nodes[i + 1]?.video ? nodes[i + 1] : node, 'metadata');
-    nodes.forEach((n, k) => { if (Math.abs(k - i) > 3) release(n); });
+    const keep = preloadAhead(i);
+    nodes.forEach((n, k) => { if (Math.abs(k - i) > keep) release(n); });
     loadDetail(node);
     history.replaceState(null, '', `/shorts/${node.v.id}${ctxQuery()}`);
     setTitle(node.v.title);
@@ -262,6 +329,8 @@ export default async function shorts({ root, params, query }) {
     h('button', { class: 'icon-btn', 'aria-label': 'Next Short', onclick: () => go(1) }, icon('down')));
   wrap.append(navBtns);
   const onKey = (e) => {
+    // Hardware / media volume keys (where the browser reports them) switch the sound on.
+    if (['AudioVolumeUp', 'AudioVolumeDown', 'VolumeUp', 'VolumeDown'].includes(e.key) || ['AudioVolumeUp', 'AudioVolumeDown'].includes(e.code)) { if (muted) setMuted(false); return; }
     if (e.target.closest?.('input,textarea,select,[contenteditable]')) return;
     if (['ArrowDown', 'PageDown', 'j'].includes(e.key)) { e.preventDefault(); go(1); }
     else if (['ArrowUp', 'PageUp', 'k'].includes(e.key)) { e.preventDefault(); go(-1); }

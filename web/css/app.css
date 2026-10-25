@@ -488,3 +488,14 @@ body.immersive #view { margin-left: var(--side-w); padding-top: var(--topbar-h);
 .sv-seek.show { animation: seekflash .6s ease-out; }
 @keyframes seekflash { 0% { opacity: 0; } 15% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .sv-seek.show { animation: none; opacity: 1; transition: opacity .6s; } }
+
+/* Shorts: buffering feedback and sound hint */
+.sv-spin { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px; z-index: 4; display: grid; place-items: center; pointer-events: none; border-radius: 50%; background: rgba(0,0,0,.45); }
+.sv-spin[hidden] { display: none; }
+.sv-spin i { width: 28px; height: 28px; border-radius: 50%; border: 3px solid rgba(255,255,255,.25); border-top-color: #fff; animation: svspin .8s linear infinite; }
+@keyframes svspin { to { transform: rotate(360deg); } }
+.sv-progress i.buf { position: absolute; left: 0; bottom: 0; background: rgba(255,255,255,.4); width: 0; transition: width .3s; }
+.sv-sound { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 6; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; background: rgba(0,0,0,.65); border: 1px solid rgba(255,255,255,.25); color: #fff; font-weight: 700; font-size: 13px; }
+.sv-sound[hidden] { display: none; }
+.sv-sound .i { width: 16px; height: 16px; }
+@media (prefers-reduced-motion: reduce) { .sv-spin i { animation-duration: 2s; } }

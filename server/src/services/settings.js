@@ -53,6 +53,7 @@ export const SETTING_SCHEMAS = {
   }),
   // "For you" mix, per 10 videos: some from what the viewer already watches, some brand new,
   // and some from outside their usual interests so the feed does not narrow.
+  playback: z.object({ mobile_start: z.enum(['shorts', 'home']) }),
   recommendations: z.object({
     enabled: z.boolean(),
     preferred: z.number().int().min(0).max(10),
@@ -116,6 +117,7 @@ export const DEFAULTS = {
     max_actors_per_ip_per_day: 50,
     client_view_delay_seconds: 3,
   },
+  playback: { mobile_start: 'shorts' },   // phones open straight into the full-screen Shorts feed
   recommendations: { enabled: true, preferred: 5, fresh: 3, exploratory: 2, fresh_days: 7, history_days: 30 },
   currency: { display: ['INR', 'USD'], usd_per_inr: 0, rates_updated_at: '' },
   ads: { reserve_space: true, show_label: false, width: 300, min_height: 600, slot_id: '' },

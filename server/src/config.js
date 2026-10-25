@@ -88,6 +88,12 @@ export const config = {
     maxAttempts: num(env.WORKER_MAX_ATTEMPTS, 3),
   },
 
+  // Optional CDN in front of this server (Cloudflare, Bunny, CloudFront...). Point it at this origin and set
+  // CDN_BASE_URL to its public address; published videos and thumbnails are then served from it.
+  cdn: {
+    baseUrl: /^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(String(env.CDN_BASE_URL || '').replace(/\/+$/, '')) ? String(env.CDN_BASE_URL).replace(/\/+$/, '') : '',
+    cacheSeconds: Math.min(Math.max(Number(env.CDN_CACHE_SECONDS) || 3600, 60), 31536000),
+  },
   maintenance: {
     inline: bool(env.RUN_MAINTENANCE, true),            // earnings upkeep inside the API process
     everyMinutes: Math.max(5, Number(env.MAINTENANCE_EVERY_MINUTES) || 60),

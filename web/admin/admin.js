@@ -600,6 +600,8 @@ async function settingsPage() {
   const tw = { window_hours: num(t.window_hours, { min: 1, max: 720 }), half_life_hours: num(t.half_life_hours, { min: 1, max: 720 }),
     w_views: num(t.w_views, { min: 0, max: 100, step: 0.5 }), w_hearts: num(t.w_hearts, { min: 0, max: 100, step: 0.5 }), w_shares: num(t.w_shares, { min: 0, max: 100, step: 0.5 }),
     w_comments: num(t.w_comments, { min: 0, max: 100, step: 0.5 }), w_dislikes: num(t.w_dislikes, { min: 0, max: 100, step: 0.5 }), w_engagement: num(t.w_engagement, { min: 0, max: 100, step: 0.5 }) };
+  // Playback
+  const pbStart = select([['shorts', 'Full-screen Shorts feed (auto-play)'], ['home', 'Home page']], s.playback.mobile_start);
   // Recommendations
   const rc = s.recommendations;
   const rec = { preferred: num(rc.preferred, { min: 0, max: 10, step: 1 }), fresh: num(rc.fresh, { min: 0, max: 10, step: 1 }), exploratory: num(rc.exploratory, { min: 0, max: 10, step: 1 }),
@@ -637,6 +639,9 @@ async function settingsPage() {
         field('Weight: views', tw.w_views), field('Weight: hearts', tw.w_hearts), field('Weight: shares', tw.w_shares),
         field('Weight: comments', tw.w_comments), field('Penalty: dislikes', tw.w_dislikes), field('Engagement-rate bonus', tw.w_engagement)),
       saveBtn((b) => save('trending', Object.fromEntries(Object.entries(tw).map(([k, el]) => [k, Number(el.value)])), b))),
+    section('Playback', field('Phones open on', pbStart, 'The first page of a visit on a phone goes straight to the Shorts feed, which auto-plays muted with a “Tap for sound” button.'),
+      h('p', { class: 'muted small' }, `CDN: ${state.config?.playback?.cdn ? 'on (CDN_BASE_URL is set)' : 'off. Set CDN_BASE_URL on the server to serve published videos from a CDN.'}`),
+      saveBtn((b) => save('playback', { mobile_start: pbStart.value }, b))),
     section('Recommendations (“For you”)', h('p', { class: 'muted small', style: 'margin-bottom:10px' }, 'Slots per 10 videos. Preferred = like what the viewer already watches; New = recently published; Exploratory = outside their usual interests. Based only on a pseudonymous viewer id, never on personal data. Nothing repeats.'),
       h('label', { class: 'toggle' }, recOn, 'Use the “For you” mix on the home page and Shorts (off = plain trending)'),
       h('div', { class: 'setting-grid' }, field('Preferred (per 10)', rec.preferred), field('New (per 10)', rec.fresh), field('Exploratory (per 10)', rec.exploratory),

@@ -189,6 +189,20 @@ Track visitors are not counted.
 * Public pages get a unique title, description, canonical URL, Open Graph / Twitter tags and `VideoObject` JSON-LD;
   `/sitemap.xml` and `/robots.txt` are generated and keep private pages and `/admin` out.
 
+### Playback on phones, buffering and CDN
+
+* On a phone (≤ 768 px wide) the first page of a visit opens straight into the full-screen Shorts feed, which auto-plays
+  muted with a **Tap for sound** button (Admin → Platform settings → Playback can switch this back to the home page).
+* Browsers do not let a web page see the phone's **physical volume buttons**, so they cannot be wired up directly. What
+  works: the Tap-for-sound button, the mute button, volume keys that the browser does report (`AudioVolumeUp/Down`),
+  and the browser's own volume controls; each of these turns the sound on.
+* Buffering: a spinner appears only after 300 ms of real stalling, a pale bar shows how much is buffered, dropped
+  connections retry up to 3 times (resuming where they stopped), and the next Shorts are preloaded according to the
+  connection (nothing extra on Data Saver / 2G or after repeated stalls; two ahead on fast 4G/Wi-Fi).
+* CDN: set `CDN_BASE_URL` (see `.env.example`). Videos are stored as one MP4 rendition, so a CDN caches and serves that
+  file close to the viewer, but it cannot choose a "best quality" itself: that needs several renditions (adaptive
+  streaming), which needs ffmpeg on the server or an external video service.
+
 ## 4. Project layout
 
 ```

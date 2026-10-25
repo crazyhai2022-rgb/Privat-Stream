@@ -143,5 +143,13 @@ function buildChrome() {
     },
   });
   window.addEventListener('popstate', () => markActive(location.pathname));
+  // Phones open straight into the full-screen, auto-playing Shorts feed (an admin setting). Only the first
+  // page of a visit does this, so the Home button still goes Home afterwards.
+  let started = false;
+  try { started = !!sessionStorage.getItem('vx_started'); sessionStorage.setItem('vx_started', '1'); } catch { /* private mode */ }
+  if (!started && location.pathname === '/' && !location.search && state.config?.playback?.mobile_start === 'shorts'
+    && window.matchMedia('(max-width: 768px)').matches) {
+    history.replaceState({}, '', '/shorts');
+  }
   await startRouter();
 })();

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { config } from '../config.js';
 import { db } from '../db/index.js';
 import { wrap, notFound } from '../lib/errors.js';
 import { getSettings } from '../services/settings.js';
@@ -21,6 +22,7 @@ api.get('/config', wrap(async (req, res) => {
       long_max_seconds: s.upload.long_max_seconds, long_max_mb: s.upload.long_max_mb,
       allowed_formats: s.upload.allowed_formats, thumbnail_max_mb: s.upload.thumbnail_max_mb,
     },
+    playback: { mobile_start: s.playback.mobile_start, cdn: !!config.cdn.baseUrl },
     comments_enabled: s.moderation.comments_enabled,
     email_verification_required: s.moderation.require_email_verification,
     policies: s.policies,
@@ -48,10 +50,14 @@ async function serveVideoFile(req, res, next, field, contentType) {
     if (!row || !row[field]) throw notFound();
     const visible = isPubliclyVisible(row);
     if (!visible && !(await canView(req, row))) throw notFound();
+    // A CDN on another hostname loads these cross-origin, so the strict same-origin policy must not be cached with them.
+    if (config.cdn.baseUrl && visible) res.set('Cross-Origin-Resource-Policy', 'cross-origin');
     const storage = await getStorage();
     await storage.serve(req, res, row[field], {
       contentType: contentType || row.mime,
-      cache: visible ? 'public, max-age=3600' : 'private, no-store',
+      cache: visible
+        ? `public, max-age=${config.cdn.cacheSeconds}, stale-while-revalidate=86400`
+        : 'private, no-store',
     });
   } catch (e) {
     if (e.code === 'ENOENT' || e.status === 404) return next(notFound());

@@ -1,3 +1,4 @@
+import { config } from '../config.js';
 import { db } from '../db/index.js';
 import { getSetting } from './settings.js';
 import { imageUrl } from './serializers.js';
@@ -17,6 +18,8 @@ const BASE_FROM = `
   join channels c on c.id = v.channel_id
   left join categories cat on cat.id = v.category_id`;
 
+const mediaUrl = (path, row) => (config.cdn.baseUrl && row.status === 'published' && row.channel_status === 'approved' ? config.cdn.baseUrl + path : path);
+
 export const videoDto = (row, { detail = false, owner = false } = {}) => ({
   id: row.public_id,
   kind: row.kind,
@@ -31,8 +34,9 @@ export const videoDto = (row, { detail = false, owner = false } = {}) => ({
   featured: row.featured,
   published_at: row.published_at,
   created_at: row.created_at,
-  thumbnail_url: row.thumbnail_key ? `/thumb/${row.public_id}` : null,
-  stream_url: row.playback_key ? `/stream/${row.public_id}` : null,
+  // Published videos come from the CDN when one is configured; anything not public stays on the origin.
+  thumbnail_url: row.thumbnail_key ? mediaUrl(`/thumb/${row.public_id}`, row) : null,
+  stream_url: row.playback_key ? mediaUrl(`/stream/${row.public_id}`, row) : null,
   category: row.category_slug ? { slug: row.category_slug, name: row.category_name } : null,
   channel: {
     name: row.channel_name,
