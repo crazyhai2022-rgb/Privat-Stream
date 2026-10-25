@@ -47,6 +47,57 @@ async function act(fn, okMsg, after) {
   try { await fn(); if (okMsg) toast(okMsg); await after?.(); } catch (e) { err(e); }
 }
 
+// ---------- first-time setup ----------
+// Shown only while the server says no Super Admin exists and a bootstrap token is configured.
+function setupView() {
+  const name = input({ autocomplete: 'name', required: true, placeholder: 'Your name' });
+  const email = input({ type: 'email', autocomplete: 'username', required: true });
+  const tokenWrap = passwordInput({ autocomplete: 'off', required: true, placeholder: 'From your hosting environment variables' });
+  const pwWrap = passwordInput({ autocomplete: 'new-password', required: true });
+  const pw2Wrap = passwordInput({ autocomplete: 'new-password', required: true });
+  const msg = h('div', { class: 'err', hidden: true });
+  const btn = h('button', { class: 'btn primary', type: 'submit', style: 'width:100%;height:42px' }, 'Create administrator');
+
+  app.replaceChildren(h('div', { class: 'adm-login' },
+    h('div', { class: 'brand', style: 'justify-content:center;margin-bottom:6px;font-size:28px' }, brandWordmark(BRAND())),
+    h('p', { class: 'muted', style: 'text-align:center;margin-bottom:18px' }, 'First-time setup'),
+    h('form', { class: 'card', onsubmit: async (e) => {
+      e.preventDefault(); msg.hidden = true;
+      if (pwWrap.input.value !== pw2Wrap.input.value) { msg.textContent = 'The two passwords do not match'; msg.hidden = false; return; }
+      btn.disabled = true;
+      try {
+        await api.post('/api/admin/bootstrap', {
+          token: tokenWrap.input.value.trim(),
+          email: email.value.trim(),
+          full_name: name.value.trim(),
+          password: pwWrap.input.value,
+        });
+        // Log straight in with what was just created.
+        const r = await api.post('/api/admin/auth/login', { email: email.value.trim(), password: pwWrap.input.value });
+        state.adminCsrf = r.csrf_token; S.admin = r.admin; S.perms = r.permissions;
+        toast('Administrator created. Remove ADMIN_BOOTSTRAP_TOKEN from your hosting settings.');
+        render();
+      } catch (e2) {
+        msg.textContent = e2.status === 404
+          ? 'Setup is not available: either an administrator already exists, or the token is wrong or missing.'
+          : e2.message;
+        msg.hidden = false;
+        btn.disabled = false;
+      }
+    } },
+      h('p', { class: 'muted small', style: 'margin-bottom:14px' },
+        'No administrator exists yet. Paste the ADMIN_BOOTSTRAP_TOKEN you set in your hosting panel and choose your login details.'),
+      field('Your name', name),
+      field('Email', email),
+      field('Setup token', tokenWrap),
+      field('Password', pwWrap, 'At least 12 characters with letters and numbers'),
+      field('Confirm password', pw2Wrap),
+      msg, btn),
+    h('p', { class: 'muted small', style: 'text-align:center;margin-top:14px' },
+      'This form disappears once the administrator exists. Delete the token afterwards.')));
+  name.focus();
+}
+
 // ---------- login ----------
 function loginView() {
   const email = input({ type: 'email', autocomplete: 'username', required: true });
@@ -66,7 +117,7 @@ function loginView() {
       } catch (e2) { msg.textContent = e2.message; msg.hidden = false; }
       btn.disabled = false;
     } }, field('Email', email), field('Password', pwWrap), msg, btn),
-    h('p', { class: 'muted small', style: 'text-align:center;margin-top:14px' }, 'Administrator accounts are created with the create-admin script on the server.')));
+    h('p', { class: 'muted small', style: 'text-align:center;margin-top:14px' }, 'Administrator accounts are created with the create-admin script, or through first-time setup.')));
   email.focus();
 }
 
@@ -607,7 +658,11 @@ async function render() {
   if (!S.admin) {
     try {
       const me = await api.get('/api/admin/auth/me');
-      if (!me.admin) return loginView();
+      if (!me.admin) {
+        let setup = false;
+        try { setup = (await api.get('/api/admin/bootstrap')).available; } catch { /* older server */ }
+        return setup ? setupView() : loginView();
+      }
       S.admin = me.admin; S.perms = me.permissions; state.adminCsrf = me.csrf_token;
     } catch { return loginView(); }
   }

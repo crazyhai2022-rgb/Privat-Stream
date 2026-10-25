@@ -350,3 +350,28 @@ describe('first-administrator bootstrap', () => {
     config.adminBootstrapToken = '';
   });
 });
+
+describe('bootstrap status endpoint', () => {
+  test('it reports availability without revealing the token', async () => {
+    const { config } = await import('../src/config.js');
+    const { db: database } = await import('../src/db/index.js');
+    const anon = client();
+
+    config.adminBootstrapToken = '';
+    let r = await anon.get('/api/admin/bootstrap');
+    assert.equal(r.status, 200);
+    assert.equal(r.body.available, false, 'no token configured');
+
+    config.adminBootstrapToken = 'bootstrap-token-at-least-24-chars-long';
+    await database.query(`update users set role = 'user' where role = 'super_admin'`);
+    r = await anon.get('/api/admin/bootstrap');
+    assert.equal(r.body.available, true, 'token set and no Super Admin yet');
+    assert.equal(JSON.stringify(r.body).includes('bootstrap-token'), false, 'the token itself is never sent');
+    assert.deepEqual(Object.keys(r.body), ['available']);
+
+    await makeAdmin();
+    r = await anon.get('/api/admin/bootstrap');
+    assert.equal(r.body.available, false, 'closed once an administrator exists');
+    config.adminBootstrapToken = '';
+  });
+});

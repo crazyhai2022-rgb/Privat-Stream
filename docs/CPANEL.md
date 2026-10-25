@@ -170,22 +170,23 @@ node src/scripts/create-admin.js --email you@example.com --name "Your Name" --ge
 > process may open it at a time. Stop the app in *Setup Node.js App* first, run the command,
 > then start it again.
 
-**Without a shell** (Terminal disabled, or you do not want to stop the app) — use the
-one-time bootstrap, which only exists until the first Super Admin is created:
+**Without a shell** (Terminal disabled, or you do not want to stop the app) — the panel has a
+first-time setup screen:
 
 1. Add an environment variable `ADMIN_BOOTSTRAP_TOKEN` with 24+ random characters, and restart.
-2. From your own computer, run (replacing the values):
-
+   Generate one with:
    ```bash
-   curl -X POST https://viralx.yourdomain.com/api/admin/bootstrap \
-     -H 'Content-Type: application/json' -H 'X-Requested-With: fetch' \
-     -d '{"token":"YOUR_TOKEN","email":"you@example.com","full_name":"Your Name","password":"a-strong-password"}'
+   node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
    ```
-3. **Delete `ADMIN_BOOTSTRAP_TOKEN`** and restart.
+2. Open `https://viralx.yourdomain.com/admin`. Because no administrator exists yet and the
+   token is set, the panel shows **First-time setup** instead of the login form. Fill in your
+   name, email, the token and a password.
+3. It creates the account and logs you straight in.
+4. **Delete `ADMIN_BOOTSTRAP_TOKEN`** from the environment variables and restart.
 
-The endpoint answers only while no Super Admin exists, refuses a token shorter than 24
-characters, compares tokens in constant time, is rate limited, and records the action in the
-audit log. A wrong token gets the same 404 as a missing one, so it reveals nothing.
+The screen and the endpoint behind it exist only while no Super Admin does, so they close
+themselves after the first use. A wrong token gets the same answer as a missing one, the
+comparison is constant-time, and the attempt is rate limited and written to the audit log.
 
 Then sign in at `https://viralx.yourdomain.com/admin`.
 

@@ -27,6 +27,14 @@ const like = (s) => `%${String(s).replace(/[%_\\]/g, (m) => '\\' + m)}%`;
 // ---------------- First-administrator bootstrap ----------------
 // Available only while no Super Admin exists AND ADMIN_BOOTSTRAP_TOKEN is set, so it closes
 // itself the moment it has been used. For hosts without a shell; prefer `npm run create-admin`.
+// Tells the panel whether to show its first-time setup form. It reveals only that setup is
+// still pending; creating the account still needs the token.
+r.get('/bootstrap', wrap(async (req, res) => {
+  const { config } = await import('../config.js');
+  const { n } = await db.one(`select count(*)::int as n from users where role = 'super_admin'`);
+  res.json({ available: !!(config.adminBootstrapToken && config.adminBootstrapToken.length >= 24) && n === 0 });
+}));
+
 r.post('/bootstrap', limiter({ windowMs: 15 * 60e3, max: 5, message: 'Too many attempts.' }), wrap(async (req, res) => {
   const { config } = await import('../config.js');
   const token = config.adminBootstrapToken;
