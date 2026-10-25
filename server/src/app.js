@@ -10,8 +10,10 @@ import videoRoutes from './routes/videos.js';
 import engagementRoutes from './routes/engagement.js';
 import adminRoutes from './routes/admin.js';
 import earningsRoutes from './routes/earnings.js';
+import researchRoutes from './routes/research.js';
 import { api as publicApi, media } from './routes/public.js';
 import { db } from './db/index.js';
+import { renderShell, buildSitemap, robotsTxt } from './services/seo.js';
 
 export function createApp() {
   const app = express();
@@ -49,6 +51,7 @@ export function createApp() {
     try { await db.query('select 1'); res.json({ ok: true }); } catch { res.status(503).json({ ok: false }); }
   });
 
+  app.use('/api', (req, res, next) => { res.setHeader('X-Robots-Tag', 'noindex'); next(); });
   app.use('/api', express.json({ limit: '100kb' }));
   app.use('/api', limiter({ windowMs: 60e3, max: 600 }));
   app.use('/api', csrfGuard);
@@ -57,6 +60,7 @@ export function createApp() {
   app.use('/api', publicApi);
   app.use('/api', channelRoutes);
   app.use('/api', earningsRoutes);
+  app.use('/api', researchRoutes);
   app.use('/api', videoRoutes);
   app.use('/api', engagementRoutes);
 
@@ -76,13 +80,21 @@ export function createApp() {
 
   // Static front-end (no build step)
   const webDir = path.join(REPO_ROOT, 'web');
+  app.use('/admin', (req, res, next) => { res.setHeader('X-Robots-Tag', 'noindex, nofollow'); next(); });
   app.use('/admin', express.static(path.join(webDir, 'admin'), { index: 'index.html', maxAge: config.isProd ? '1h' : 0 }));
   app.use(express.static(webDir, { index: false, maxAge: config.isProd ? '1h' : 0 }));
-  app.get(/^\/(?!api\/|stream\/|thumb\/|media\/).*/, (req, res, next) => {
-    if (req.path.startsWith('/admin')) return res.sendFile(path.join(webDir, 'admin', 'index.html'));
+  app.get('/robots.txt', (req, res) => { res.type('text/plain').set('Cache-Control', 'public, max-age=3600').send(robotsTxt(req)); });
+  app.get('/sitemap.xml', async (req, res, next) => {
+    try { res.type('application/xml').set('Cache-Control', 'public, max-age=900').send(await buildSitemap(req)); } catch (e) { next(e); }
+  });
+  app.get(/^\/(?!api\/|stream\/|thumb\/|media\/).*/, async (req, res, next) => {
+    if (req.path.startsWith('/admin')) { res.setHeader('X-Robots-Tag', 'noindex, nofollow'); return res.sendFile(path.join(webDir, 'admin', 'index.html')); }
     if (path.extname(req.path)) return next();
-    res.setHeader('Cache-Control', 'no-cache');
-    res.sendFile(path.join(webDir, 'index.html'));
+    try {
+      const html = await renderShell(req);
+      res.setHeader('Cache-Control', 'no-cache');
+      res.type('html').send(html);
+    } catch (e) { next(e); }
   });
 
   app.use(errorHandler);

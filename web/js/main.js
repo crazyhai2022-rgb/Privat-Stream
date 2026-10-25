@@ -28,6 +28,7 @@ route('/studio/payouts', page('earnings', 'payouts'));
 route('/studio/payments', page('earnings', 'settings'));
 route('/studio', page('studio'));
 route('/upload', page('upload'));
+route('/research', page('research'));
 route('/upload/short', page('upload', 'short'));
 route('/upload/long', page('upload', 'long'));
 route('/saved', page('saved'));
@@ -44,7 +45,7 @@ function myChannelHref() {
 }
 const NAV = () => [
   ['/', 'Home', 'home'], ['/shorts', 'Shorts', 'shorts'], ['/long', 'Long Videos', 'film'], ['/categories', 'Categories', 'grid'],
-  ['/saved', 'Saved Videos', 'bookmark'], [myChannelHref(), 'My Channel', 'user', 'channel'], ['/upload', 'Upload', 'upload'], ['/settings', 'Settings', 'sliders'],
+  ['/saved', 'Saved Videos', 'bookmark'], [myChannelHref(), 'My Channel', 'user', 'channel'], ['/upload', 'Upload', 'upload'], ['/research', 'Research', 'search'], ['/settings', 'Settings', 'sliders'],
 ];
 
 function navLinks() {

@@ -14,7 +14,7 @@ const storage = multer.diskStorage({
 
 /** Build a multer middleware with request-specific limits. fields: [{name, maxBytes}] */
 export function uploader(fields) {
-  const maxBytes = Math.max(...fields.map((f) => f.maxBytes));
+  const maxBytes = Math.floor(Math.max(...fields.map((f) => f.maxBytes)));
   const sizes = Object.fromEntries(fields.map((f) => [f.name, f.maxBytes]));
   const m = multer({
     storage,

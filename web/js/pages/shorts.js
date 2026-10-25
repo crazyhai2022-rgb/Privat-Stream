@@ -3,7 +3,7 @@ import { h, icon, fmtCount, setTitle, qs, toast } from '../util.js';
 import { api, state } from '../api.js';
 import { navigate } from '../router.js';
 import { avatarEl } from '../cards.js';
-import { react, toggleSave, shareVideo, reportDialog, requireLogin, telegramButton, commentsPanel } from '../engage.js';
+import { react, toggleSave, shareVideo, reportDialog, requireLogin, subscribeBar, commentsPanel } from '../engage.js';
 import { SORT_LABELS } from '../listing.js';
 
 let muted = true; // starts muted (browser autoplay rules + no surprise audio); stays unmuted once the user chooses
@@ -162,8 +162,10 @@ export default async function shorts({ root, params, query }) {
       const m = d.video;
       Object.assign(node.v, { my_reaction: m.my_reaction, saved: m.saved, telegram: m.telegram, comments_enabled: m.comments_enabled, description: m.description });
       node.v.metrics = { ...node.v.metrics, ...m.metrics };
-      const tg = telegramButton(m.telegram);
-      if (tg) node.who.append(tg);
+      const mine = state.channel?.handle === node.v.channel.handle;
+      let info = { subscribers: 0, subscribed: false };
+      try { info = await api.get(`/api/channels/${node.v.channel.handle}/subscription`); } catch { /* show the bar anyway */ }
+      node.who.append(subscribeBar(node.v.channel, info, { telegram: m.telegram, isOwner: mine }).el);
       refresh(node);
     } catch { node.detail = false; }
   }

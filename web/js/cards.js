@@ -9,7 +9,7 @@ export function avatarEl(channel, cls = '') {
 
 function thumb(v, cls) {
   if (!v.thumbnail_url) return h('div', { class: `ph ${cls || ''}` }, 'No preview');
-  const img = h('img', { src: v.thumbnail_url, alt: '', loading: 'lazy', decoding: 'async' });
+  const img = h('img', { src: v.thumbnail_url, alt: v.title ? `Thumbnail: ${v.title}` : 'Video thumbnail', loading: 'lazy', decoding: 'async' });
   img.addEventListener('error', () => img.replaceWith(h('div', { class: `ph ${cls || ''}` }, 'No preview')), { once: true });
   return img;
 }

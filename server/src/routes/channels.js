@@ -174,9 +174,44 @@ r.get('/channels/:handle', wrap(async (req, res) => {
   const stats = await db.one(`select count(*) filter (where kind = 'short')::int as shorts, count(*) filter (where kind = 'long')::int as longs,
       coalesce(sum(views_count), 0)::int as views from videos where channel_id = $1 and status = 'published'`, [ch.id]);
   const tg = await resolveTelegram(ch);
-  const dto = channelDto(ch, { categories: await categoriesOf(ch.id), stats, telegram: tg });
+  const sub = await subscriptionState(ch.id, req.user?.id);
+  const dto = channelDto(ch, { categories: await categoriesOf(ch.id), stats, telegram: tg, subscribers: sub.subscribers, subscribed: sub.subscribed });
   if (!isOwner) { delete dto.telegram_url; delete dto.telegram_enabled; delete dto.status_reason; }
   res.json({ channel: dto, is_owner: !!isOwner });
+}));
+
+// ---------- Subscriptions ----------
+async function subscriptionState(channelId, userId) {
+  const { n } = await db.one('select count(*)::int as n from channel_subscriptions where channel_id = $1', [channelId]);
+  const mine = userId ? await db.one('select 1 as x from channel_subscriptions where channel_id = $1 and user_id = $2', [channelId, userId]) : null;
+  return { subscribers: n, subscribed: !!mine };
+}
+
+async function publicChannel(req) {
+  const ch = await db.one(`select c.id, c.user_id, c.status, u.account_status from channels c join users u on u.id = c.user_id where lower(c.handle) = $1`,
+    [String(req.params.handle || '').toLowerCase()]);
+  if (!ch || ch.status !== 'approved' || ch.account_status !== 'active') throw notFound('Channel not found');
+  return ch;
+}
+
+r.get('/channels/:handle/subscription', wrap(async (req, res) => {
+  const ch = await publicChannel(req);
+  res.json(await subscriptionState(ch.id, req.user?.id));
+}));
+
+// Subscribing and unsubscribing are idempotent: repeating either returns the same final state.
+r.post('/channels/:handle/subscribe', requireAuth, wrap(async (req, res) => {
+  const ch = await publicChannel(req);
+  if (ch.user_id === req.user.id) throw badRequest('You cannot subscribe to your own channel');
+  if (req.user.account_status !== 'active') throw forbidden('Your account cannot subscribe right now');
+  await db.query('insert into channel_subscriptions (channel_id, user_id) values ($1,$2) on conflict do nothing', [ch.id, req.user.id]);
+  res.json(await subscriptionState(ch.id, req.user.id));
+}));
+
+r.delete('/channels/:handle/subscribe', requireAuth, wrap(async (req, res) => {
+  const ch = await publicChannel(req);
+  await db.query('delete from channel_subscriptions where channel_id = $1 and user_id = $2', [ch.id, req.user.id]);
+  res.json(await subscriptionState(ch.id, req.user.id));
 }));
 
 export default r;

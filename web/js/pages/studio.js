@@ -1,7 +1,8 @@
 import { h, icon, setTitle, toast, fmtCount, timeAgo, statusPill, confirmDialog, openModal } from '../util.js';
-import { api, state, refreshMe } from '../api.js';
+import { api, state, refreshMe, upload } from '../api.js';
 import { navigate } from '../router.js';
 import { emptyState } from '../cards.js';
+import { thumbnailPicker } from '../thumbnailPicker.js';
 
 const STATUS_HELP = {
   pending: 'Your creator application is Pending Review. An administrator will approve or reject it. You cannot upload until it is approved.',
@@ -79,11 +80,32 @@ export default async function studio({ root }) {
         h('div', { class: 'muted small', style: 'margin-top:4px' }, `Created ${timeAgo(v.created_at)}`),
         h('div', { class: 'row wrap', style: 'margin-top:8px' },
           h('button', { class: 'btn sm', onclick: () => edit(v) }, icon('edit'), 'Edit'),
+          v.playable !== false && v.status !== 'draft' && v.status !== 'removed' ? h('button', { class: 'btn sm', onclick: () => changeThumb(v) }, icon('film'), 'Thumbnail') : null,
           v.status === 'draft' ? h('a', { class: 'btn sm', href: `/upload/${v.kind}?draft=${v.id}` }, icon('upload'), 'Upload file') : null,
           v.status === 'draft' && v.error_message ? h('button', { class: 'btn sm', onclick: () => retry(v) }, icon('refresh'), 'Retry processing') : null,
           h('button', { class: 'btn sm danger', onclick: () => remove(v) }, icon('trash'), 'Delete'))));
   }
 
+  function changeThumb(v) {
+    openModal((box, close) => {
+      box.classList.add('thumb-modal');
+      const picker = thumbnailPicker({ kind: v.kind });
+      picker.setVideo(v.stream_url || null);
+      const err = h('div', { class: 'err', hidden: true });
+      const save = h('button', { class: 'btn primary', type: 'button', onclick: async () => {
+        const blob = picker.getBlob();
+        if (!blob) { err.textContent = 'Pick a frame or upload an image first.'; err.hidden = false; return; }
+        save.disabled = true; err.hidden = true;
+        try {
+          const fd = new FormData(); fd.append('thumbnail', blob, 'thumbnail.jpg');
+          await upload(`/api/videos/${v.id}/thumbnail`, fd);
+          toast('Thumbnail updated'); picker.destroy(); close(true); loadVideos();
+        } catch (e) { err.textContent = e.message; err.hidden = false; save.disabled = false; }
+      } }, 'Save thumbnail');
+      box.append(h('h3', null, 'Change thumbnail'), picker.el, err,
+        h('div', { class: 'btns' }, h('button', { class: 'btn', type: 'button', onclick: () => { picker.destroy(); close(null); } }, 'Cancel'), save));
+    });
+  }
   async function retry(v) {
     try { await api.post(`/api/videos/${v.id}/retry`); toast('Processing restarted'); loadVideos(); } catch (e) { toast(e.message, 'bad'); }
   }

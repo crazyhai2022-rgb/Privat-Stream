@@ -2,7 +2,7 @@ import { h, icon, fmtCount, timeAgo, setTitle, statusPill } from '../util.js';
 import { api, state } from '../api.js';
 import { navigate } from '../router.js';
 import { avatarEl, longCard, emptyState, sectionHead } from '../cards.js';
-import { react, toggleSave, shareVideo, reportDialog, telegramButton, commentsPanel } from '../engage.js';
+import { react, toggleSave, shareVideo, reportDialog, subscribeBar, commentsPanel } from '../engage.js';
 
 export default async function watch({ root, params }) {
   const page = h('div', { class: 'page' });
@@ -63,12 +63,16 @@ export default async function watch({ root, params }) {
     if (viewBtn) viewBtn.textContent = `${commentsOpen ? 'Hide' : 'View'} Comments (${fmtCount(v.metrics.comments)})`;
   }
 
-  const tg = telegramButton(v.telegram);
+  const sbar = subscribeBar(v.channel, { subscribers: 0, subscribed: false }, { telegram: v.telegram, isOwner: state.channel?.handle === v.channel.handle });
+  api.get(`/api/channels/${v.channel.handle}/subscription`).then((info) => {
+    const fresh = subscribeBar(v.channel, info, { telegram: v.telegram, isOwner: state.channel?.handle === v.channel.handle });
+    sbar.el.replaceWith(fresh.el); sbar.countEl.replaceWith(fresh.countEl);
+  }).catch(() => {});
   main.append(h('div', { class: 'wmeta' },
-    h('div', { class: 'row' },
-      h('a', { href: `/c/${v.channel.handle}`, class: 'row' }, avatarEl(v.channel, 'md'),
-        h('div', null, h('div', { style: 'font-weight:700' }, v.channel.name), h('div', { class: 'muted small' }, '@' + v.channel.handle))),
-      tg),
+    h('div', { class: 'wchan' },
+      h('a', { href: `/c/${v.channel.handle}`, class: 'row wlink' }, avatarEl(v.channel, 'md'),
+        h('div', { class: 'wname' }, h('div', { class: 'cname-sm' }, v.channel.name), h('div', { class: 'muted small' }, '@' + v.channel.handle))),
+      sbar.countEl, sbar.el),
     h('div', { class: 'actions' }, heart.b, dis.b, comBtn.b, share.b, save.b, report)));
 
   const statsText = () => `${fmtCount(v.metrics.views)} views · ${v.published_at ? timeAgo(v.published_at) : 'not published'}`;

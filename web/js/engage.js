@@ -92,8 +92,45 @@ export function reportDialog(video, comment) {
 }
 
 export function telegramButton(tg, cls = '') {
-  if (!tg?.url) return null;
+  // Only a valid https://t.me link ever renders; otherwise there is no button at all.
+  if (!tg?.url || !/^https:\/\/t\.me\//i.test(tg.url)) return null;
   return h('a', { class: `btn tg sm ${cls}`, href: tg.url, target: '_blank', rel: 'noopener noreferrer nofollow', onclick: (e) => e.stopPropagation() }, icon('send'), 'Join Telegram');
+}
+
+/**
+ * Subscribe button with the compact Telegram pill beside it.
+ * The UI updates at once and rolls back if the request fails.
+ * `info` is { subscribers, subscribed } and is_owner hides the subscribe action.
+ */
+export function subscribeBar(channel, info, { telegram, isOwner = false, onCount } = {}) {
+  let subscribed = !!info?.subscribed, count = Number(info?.subscribers || 0), busy = false;
+  const countEl = h('span', { class: 'muted small sub-count' });
+  const btn = h('button', { class: 'btn subscribe', type: 'button' });
+  const paint = () => {
+    btn.textContent = subscribed ? 'Subscribed' : 'Subscribe';
+    btn.classList.toggle('on', subscribed);
+    btn.setAttribute('aria-pressed', String(subscribed));
+    countEl.textContent = `${fmtCount(count)} subscriber${count === 1 ? '' : 's'}`;
+    onCount?.(count);
+  };
+  btn.addEventListener('click', async () => {
+    if (!state.user) { navigate(`/login?next=${encodeURIComponent(location.pathname)}`); return; }
+    if (busy) return;
+    busy = true;
+    const prev = { subscribed, count };
+    subscribed = !subscribed; count = Math.max(0, count + (subscribed ? 1 : -1)); paint();
+    try {
+      const r = await (prev.subscribed ? api.del : api.post)(`/api/channels/${channel.handle}/subscribe`);
+      subscribed = r.subscribed; count = r.subscribers; paint();
+    } catch (e) {
+      ({ subscribed, count } = prev); paint(); toast(e.message || 'Could not update your subscription', 'bad');
+    }
+    busy = false;
+  });
+  paint();
+  const tg = telegramButton(telegram, 'pill');
+  const el = h('div', { class: 'chactions' }, isOwner ? null : btn, tg);
+  return { el, countEl };
 }
 
 /** Comments panel; loads only when created (the caller creates it when the user opens the panel). */

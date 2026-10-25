@@ -9,7 +9,10 @@ import { resolveTelegram } from '../services/telegram.js';
 import { getSetting } from '../services/settings.js';
 import { getStorage } from '../storage/index.js';
 import { uploader, cleanupFiles, extFor } from '../lib/uploads.js';
-import { sniff } from '../lib/media.js';
+import { sniff, hasFfmpeg, makeThumbnail } from '../lib/media.js';
+import { storeThumbnail } from '../services/thumbnails.js';
+import path from 'node:path';
+import { config } from '../config.js';
 import { publicId, fileId } from '../lib/crypto.js';
 import { enqueueProcessing } from '../services/processing.js';
 import { canUpload } from '../services/serializers.js';
@@ -30,7 +33,7 @@ async function ownerChannel(req) {
   return ch;
 }
 // Re-checked against the database on every call, so client state can never grant upload rights.
-async function requireUploader(req, res, next) {
+export async function requireUploader(req, res, next) {
   try {
     const ch = await ownerChannel(req);
     if (!ch) return next(forbidden('Create your channel before uploading', 'no_channel'));
@@ -132,10 +135,7 @@ async function uploadHandler(req, res) {
     let thumbKey = null;
     const thumb = req.files?.thumbnail?.[0];
     if (thumb) {
-      const t = await sniff(thumb.path);
-      if (!t || t.type !== 'image') await fail('Thumbnail must be a JPEG, PNG or WebP image.');
-      thumbKey = `thumbs/${fileId()}${extFor(t.format)}`;
-      await storage.put(thumbKey, thumb.path, t.mime);
+      try { thumbKey = await storeThumbnail(thumb, row.kind, storage); } catch (e) { await fail(e.message); }
     }
     await db.query(
       `update videos set original_key = $2, mime = $3, size_bytes = $4, thumbnail_key = coalesce($5, thumbnail_key),
@@ -162,6 +162,58 @@ r.post('/videos/:id/upload', requireAuth, requireUploader, wrap(async (req, res,
     if (err) return next(err);
     uploadHandler(req, res).catch(async (e) => { await cleanupFiles(req); next(e); });
   });
+}));
+
+// ---------- Thumbnail changes (after the video exists) ----------
+const thumbUpload = (req, res, next) => getSetting('upload').then((u) =>
+  uploader([{ name: 'thumbnail', maxBytes: u.thumbnail_max_mb * 1024 * 1024 }])(req, res, next)).catch(next);
+
+async function swapThumbnail(row, newKey) {
+  const storage = await getStorage();
+  const old = row.thumbnail_key;
+  await db.query(`update videos set thumbnail_key = $2, custom_thumbnail = true, updated_at = now() where id = $1`, [row.id, newKey]);
+  if (old && old !== newKey) await storage.remove(old).catch(() => {});
+}
+
+r.post('/videos/:id/thumbnail', requireAuth, requireUploader, thumbUpload, wrap(async (req, res) => {
+  try {
+    const { row } = await ownedVideo(req);
+    if (row.status === 'removed') throw forbidden('This video was removed');
+    const file = req.files?.thumbnail?.[0];
+    if (!file) throw badRequest('Choose an image');
+    await swapThumbnail(row, await storeThumbnail(file, row.kind, await getStorage()));
+    const v = await getVideoRowByPublicId(row.public_id);
+    res.json({ video: videoDto(v, { detail: true, owner: true }) });
+  } finally {
+    await cleanupFiles(req);
+  }
+}));
+
+// Server-side frame grab (needs ffmpeg). Browsers normally capture the frame themselves.
+r.post('/videos/:id/thumbnail/frame', requireAuth, requireUploader, wrap(async (req, res) => {
+  const { row } = await ownedVideo(req);
+  if (row.status === 'removed') throw forbidden('This video was removed');
+  const at = z.object({ at: z.number().min(0).max(36000) }).parse(req.body).at;
+  if (!row.original_key) throw conflict('Upload the video first', 'no_video');
+  if (!(await hasFfmpeg())) throw conflict('This server cannot extract frames. Pick the frame in your browser or upload an image instead.', 'no_ffmpeg');
+  const storage = await getStorage();
+  const work = path.join(config.storage.tmpDir, `frame-${fileId()}`);
+  await fsp.mkdir(work, { recursive: true });
+  try {
+    const src = path.join(work, `src${path.extname(row.original_key) || '.mp4'}`);
+    await storage.download(row.original_key, src);
+    const out = path.join(work, 'frame.jpg');
+    const dur = Number(row.duration_seconds) || at + 1;
+    try { await makeThumbnail(src, out, { kind: row.kind, at: Math.min(at, Math.max(0, dur - 0.2)) }); }
+    catch { throw badRequest('Could not capture a frame at that time. Try a different moment.'); }
+    const key = `thumbs/${fileId()}.jpg`;
+    await storage.put(key, out, 'image/jpeg');
+    await swapThumbnail(row, key);
+  } finally {
+    await fsp.rm(work, { recursive: true, force: true });
+  }
+  const v = await getVideoRowByPublicId(row.public_id);
+  res.json({ video: videoDto(v, { detail: true, owner: true }) });
 }));
 
 r.get('/videos/:id/status', requireAuth, wrap(async (req, res) => {
