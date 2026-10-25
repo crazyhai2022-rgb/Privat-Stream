@@ -35,6 +35,27 @@ export const SETTING_SCHEMAS = {
     w_dislikes: z.number().min(0).max(100),
     w_engagement: z.number().min(0).max(100),
   }),
+  monetization: z.object({
+    enabled: z.boolean(),
+    // Rupees per 1000 eligible views, per video kind.
+    rate_short_per_1000: z.number().min(0).max(10000),
+    rate_long_per_1000: z.number().min(0).max(10000),
+    min_payout: z.number().min(1).max(100000),
+    payout_day: z.number().int().min(1).max(28),
+    // Days an entry waits before it can be approved, leaving room to spot abuse.
+    approval_delay_days: z.number().int().min(0).max(60),
+    auto_approve: z.boolean(),
+    // View eligibility policy.
+    dedupe_hours: z.number().min(0.25).max(168),
+    max_views_per_actor_per_day: z.number().int().min(1).max(10000),
+    max_actors_per_ip_per_day: z.number().int().min(1).max(10000),
+    client_view_delay_seconds: z.number().min(0).max(600),
+  }),
+  currency: z.object({
+    display: z.array(z.enum(['INR', 'USD', 'EUR', 'GBP', 'AED'])).min(1),
+    usd_per_inr: z.number().min(0).max(10),
+    rates_updated_at: z.string().max(40),
+  }),
   ads: z.object({
     reserve_space: z.boolean(),
     show_label: z.boolean(),
@@ -72,6 +93,20 @@ export const DEFAULTS = {
     w_dislikes: 2,
     w_engagement: 2,
   },
+  monetization: {
+    enabled: true,
+    rate_short_per_1000: 2,    // ₹10 per 5,000 eligible views
+    rate_long_per_1000: 10,    // ₹10 per 1,000 eligible views
+    min_payout: 500,
+    payout_day: 7,
+    approval_delay_days: 3,
+    auto_approve: true,
+    dedupe_hours: 24,
+    max_views_per_actor_per_day: 200,
+    max_actors_per_ip_per_day: 50,
+    client_view_delay_seconds: 3,
+  },
+  currency: { display: ['INR', 'USD'], usd_per_inr: 0, rates_updated_at: '' },
   ads: { reserve_space: true, show_label: false, width: 300, min_height: 600, slot_id: '' },
   policies: {
     content_policy: 'Only upload content you own or have the right to share. No illegal, hateful, sexually explicit, or harmful content.',

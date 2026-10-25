@@ -60,7 +60,7 @@ r.post('/videos/:id/view', limiter({ windowMs: 60e3, max: 120 }), wrap(async (re
     const [recent] = await q(`select 1 as x from video_events where video_id = $1 and type = 'view' and actor_key = $2 and created_at > now() - interval '30 minutes' limit 1`, [video.id, actor.key]);
     if (recent) return { counted: false, views: video.views_count };
     const [ever] = await q(`select 1 as x from video_events where video_id = $1 and type = 'view' and actor_key = $2 limit 1`, [video.id, actor.key]);
-    await q(`insert into video_events (video_id, type, actor_key) values ($1,'view',$2)`, [video.id, actor.key]);
+    await q(`insert into video_events (video_id, type, actor_key, ip_hash) values ($1,'view',$2,$3)`, [video.id, actor.key, ipHash(req.ip)]);
     const [v] = await q(`update videos set views_count = views_count + 1, unique_views_count = unique_views_count + $2 where id = $1 returning views_count`, [video.id, ever ? 0 : 1]);
     return { counted: true, views: v.views_count };
   });
@@ -74,7 +74,7 @@ r.post('/videos/:id/share', limiter({ windowMs: 60e3, max: 30 }), wrap(async (re
   const out = await db.tx(async (q) => {
     const [recent] = await q(`select 1 as x from video_events where video_id = $1 and type = 'share' and actor_key = $2 and created_at > now() - interval '1 hour' limit 1`, [video.id, actor.key]);
     if (recent) return { counted: false, shares: video.shares_count };
-    await q(`insert into video_events (video_id, type, actor_key) values ($1,'share',$2)`, [video.id, actor.key]);
+    await q(`insert into video_events (video_id, type, actor_key, ip_hash) values ($1,'share',$2,$3)`, [video.id, actor.key, ipHash(req.ip)]);
     const [v] = await q('update videos set shares_count = shares_count + 1 where id = $1 returning shares_count', [video.id]);
     return { counted: true, shares: v.shares_count };
   });
