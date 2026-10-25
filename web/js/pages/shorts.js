@@ -6,6 +6,7 @@ import { avatarEl } from '../cards.js';
 import { react, toggleSave, shareVideo, reportDialog, requireLogin, subscribeBar, commentsPanel } from '../engage.js';
 import { SORT_LABELS } from '../listing.js';
 
+const TITLE_MAX = 32;        // longer titles are cut here and end in "..."
 const SEEK_SECONDS = 10;     // double-tap / double-click skips this far
 const DOUBLE_TAP_MS = 280;   // how quickly the second tap must follow the first
 
@@ -97,6 +98,7 @@ export default async function shorts({ root, params, query }) {
       seeking = true; clearTimeout(seekingTimer); seekingTimer = setTimeout(() => { seeking = false; }, 700);
     };
     const tap = h('div', { class: 'sv-tap', 'aria-hidden': 'true', onclick: (e) => {
+      if (node.isOpen?.()) { node.setOpen(false); return; }
       const dir = zoneOf(e);
       const now = performance.now();
       if (dir !== 0 && (seeking || (tapTimer && now - lastTapAt < DOUBLE_TAP_MS))) {
@@ -115,9 +117,27 @@ export default async function shorts({ root, params, query }) {
 
     const who = h('div', { class: 'who' },
       h('a', { href: `/c/${v.channel.handle}`, class: 'row', style: 'gap:8px' }, avatarEl(v.channel, 'md'), h('span', { class: 'un' }, '@' + v.channel.handle)));
-    const info = h('div', { class: 'sv-info' }, who,
-      h('div', { class: 'cap' }, h('b', null, v.title), v.caption && v.caption !== v.title ? h('div', { class: 'clamp2', style: 'margin-top:2px;font-weight:400' }, v.caption) : null),
+    // The title is cut to a fixed length with "..."; the full title, description and category stay hidden
+    // until the caption is tapped, so the video keeps the screen.
+    const desc = String(v.description || v.caption || '').trim();
+    const cut = v.title.length > TITLE_MAX;
+    const expandable = cut || (desc && desc !== v.title) || !!v.category;
+    const more = h('div', { class: 'more', id: `more-${v.id}` },
+      cut ? h('div', { class: 'full' }, v.title) : null,
+      desc && desc !== v.title ? h('div', { class: 'txt' }, desc) : null,
       v.category ? h('a', { class: 'cat', href: `/category/${v.category.slug}` }, v.category.name) : null);
+    const cap = h('div', { class: `cap${expandable ? ' expandable' : ''}`, role: expandable ? 'button' : null, tabindex: expandable ? '0' : null,
+      'aria-expanded': expandable ? 'false' : null, 'aria-controls': expandable ? `more-${v.id}` : null },
+      h('div', { class: 'ttl' }, h('b', null, cut ? v.title.slice(0, TITLE_MAX).trimEnd() + '...' : v.title), expandable ? h('span', { class: 'chev', 'aria-hidden': 'true' }, icon('up')) : null),
+      more);
+    const info = h('div', { class: 'sv-info' }, who, cap);
+    node.setOpen = (open) => { info.classList.toggle('open', open); cap.setAttribute('aria-expanded', String(open)); };
+    node.isOpen = () => info.classList.contains('open');
+    if (expandable) {
+      const toggle = (e) => { if (e.target.closest('a')) return; node.setOpen(!node.isOpen()); };
+      cap.addEventListener('click', toggle);
+      cap.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(e); } });
+    }
 
     const muteBtn = h('button', { class: 'sv-pill', 'aria-label': 'Toggle sound', onclick: (e) => { e.stopPropagation(); setMuted(!muted); } }, icon(muted ? 'mute' : 'volume'));
     const moreBtn = h('button', { class: 'sv-pill', 'aria-label': 'Report this Short', onclick: (e) => { e.stopPropagation(); reportDialog(node.v); } }, icon('flag'));
@@ -273,7 +293,7 @@ export default async function shorts({ root, params, query }) {
   function activate(i) {
     if (i === active || i < 0 || i >= nodes.length) return;
     const prev = nodes[active];
-    if (prev) { prev.video.pause(); clearTimeout(timers.get(prev)); if (!prev.sheet.hidden) { prev.sheet.classList.remove('open'); prev.sheet.hidden = true; } }
+    if (prev) { prev.setOpen?.(false); prev.video.pause(); clearTimeout(timers.get(prev)); if (!prev.sheet.hidden) { prev.sheet.classList.remove('open'); prev.sheet.hidden = true; } }
     active = i;
     const node = nodes[i];
     playNode(node);

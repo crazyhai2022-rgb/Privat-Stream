@@ -495,7 +495,23 @@ body.immersive #view { margin-left: var(--side-w); padding-top: var(--topbar-h);
 .sv-spin i { width: 28px; height: 28px; border-radius: 50%; border: 3px solid rgba(255,255,255,.25); border-top-color: #fff; animation: svspin .8s linear infinite; }
 @keyframes svspin { to { transform: rotate(360deg); } }
 .sv-progress i.buf { position: absolute; left: 0; bottom: 0; background: rgba(255,255,255,.4); width: 0; transition: width .3s; }
-.sv-sound { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 6; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; background: rgba(0,0,0,.65); border: 1px solid rgba(255,255,255,.25); color: #fff; font-weight: 700; font-size: 13px; }
+.sv-sound { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); z-index: 6; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; background: rgba(0,0,0,.65); border: 1px solid rgba(255,255,255,.25); color: #fff; font-weight: 700; font-size: 13px; }
 .sv-sound[hidden] { display: none; }
 .sv-sound .i { width: 16px; height: 16px; }
 @media (prefers-reduced-motion: reduce) { .sv-spin i { animation-duration: 2s; } }
+
+/* Shorts overlay: one-line title, details slide up when tapped */
+.sv-info .cap { margin-top: 6px; }
+.sv-info .cap .ttl { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.sv-info .cap .ttl b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sv-info .cap.expandable { cursor: pointer; }
+.sv-info .cap .chev { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.16); transition: transform .25s; }
+.sv-info .cap .chev .i { width: 14px; height: 14px; }
+.sv-info.open .cap .chev { transform: rotate(180deg); }
+.sv-info .cap .more { max-height: 0; opacity: 0; overflow: hidden; transform: translateY(12px); transition: max-height .3s ease, opacity .25s ease, transform .3s ease; font-weight: 400; }
+.sv-info.open .cap .more { max-height: 42vh; opacity: 1; transform: none; overflow-y: auto; margin-top: 8px; overscroll-behavior: contain; }
+.sv-info .cap .more .full { font-weight: 700; margin-bottom: 4px; overflow-wrap: anywhere; }
+.sv-info .cap .more .txt { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.4; }
+.sv-info.open { background: linear-gradient(to top, rgba(0,0,0,.92) 55%, rgba(0,0,0,0)); }
+.sv-info .cap .more .cat { margin-top: 10px; }
+@media (prefers-reduced-motion: reduce) { .sv-info .cap .more, .sv-info .cap .chev { transition: none; } }
