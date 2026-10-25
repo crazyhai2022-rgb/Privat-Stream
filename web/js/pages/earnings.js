@@ -3,6 +3,7 @@ import { api, state, refreshMe } from '../api.js';
 import { navigate } from '../router.js';
 import { chart } from '../charts.js';
 import { emptyState } from '../cards.js';
+import { studioTabs } from '../creatorNav.js';
 
 const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const inrShort = (n) => (n >= 1000 ? `₹${(n / 1000).toFixed(n % 1000 ? 1 : 0)}k` : `₹${Number(n).toFixed(n % 1 ? 1 : 0)}`);
@@ -15,19 +16,17 @@ const METHOD_LABEL = (m) => (m.type === 'upi' ? 'UPI' : ({ btc: 'Bitcoin', eth: 
 const VSTATUS = { pending: ['Pending verification', 'pending'], verified: ['Verified', 'approved'], rejected: ['Rejected', 'rejected'], changes_requested: ['Requires changes', 'suspended'] };
 
 async function render({ root }, tab) {
-  setTitle('Earnings & Payments');
+  setTitle('Creator studio · Earnings');
   if (!state.user) { navigate('/login?next=/studio/earnings', { replace: true }); return; }
   await refreshMe();
   const page = h('div', { class: 'page' });
   root.append(page);
-  page.append(h('h1', { class: 'title', style: 'margin-bottom:6px' }, 'Earnings & Payments'));
+  page.append(h('h1', { class: 'title', style: 'margin-bottom:12px' }, 'Creator studio'));
   if (!state.channel) { page.append(emptyState('No channel yet', 'Create a channel to start earning.', h('a', { class: 'btn primary', href: '/channel/setup', style: 'margin-top:12px' }, 'Set up channel'))); return; }
   if (state.channel.status !== 'approved') { page.append(h('div', { class: 'notice warn' }, 'Earnings and payment settings open once your channel is approved.')); return; }
 
   tab = tab || 'overview';
-  const tabs = h('div', { class: 'tabs' },
-    ...[['overview', '/studio/earnings', 'Overview'], ['payouts', '/studio/payouts', 'Payment history'], ['settings', '/studio/payments', 'Payment settings']]
-      .map(([k, href, label]) => h('a', { href, class: k === tab ? 'on' : '' }, label)));
+  const tabs = studioTabs(tab);
   const body = h('div');
   page.append(tabs, body);
   try {
@@ -46,6 +45,18 @@ async function overview(body) {
   const s = await api.get('/api/me/earnings');
   const b = s.balance;
   const pct = Math.round(b.progress * 100);
+  // Withdrawal: ask for the whole payable balance to be paid now instead of waiting for the 7th.
+  const wd = await api.get('/api/me/withdrawal').catch(() => ({ can_request: false, reason: '' }));
+  const withdrawCard = h('div', { class: 'card', style: 'margin:0 0 16px' },
+    h('div', { class: 'row between wrap' },
+      h('div', null, h('b', null, 'Withdraw earnings'), h('p', { class: 'muted small', style: 'margin-top:4px' }, wd.can_request
+        ? `You can withdraw your full payable balance of ${inr(b.payable)}. An administrator reviews and pays it to your verified payment method.`
+        : wd.reason || '')),
+      h('button', { class: 'btn primary', disabled: !wd.can_request, onclick: async (e) => {
+        if (!await confirmDialog({ title: 'Request withdrawal?', text: `${inr(b.payable)} will be sent to your default payment method after review. This cannot be changed once requested.`, confirmText: 'Request withdrawal' })) return;
+        e.target.disabled = true;
+        try { await api.post('/api/me/withdrawals'); toast('Withdrawal requested'); navigate('/studio/payouts'); } catch (er) { toast(er.message, 'bad'); e.target.disabled = false; }
+      } }, 'Request withdrawal')));
   body.append(
     h('div', { class: 'stat-grid earn-cards' },
       stat('Estimated earnings', inr(b.estimated_total), 'All time, before approval'),
@@ -61,6 +72,7 @@ async function overview(body) {
         ? 'You have reached the minimum. The full balance is paid on the next payout date.'
         : `Payouts are made in full only. Below ${inr(b.min_payout)} your balance simply carries forward to the next month — nothing is lost.`),
       s.converted.amounts.USD != null ? h('p', { class: 'muted small' }, `Estimated ≈ $${s.converted.amounts.USD.toFixed(2)} USD (indicative only; updated ${fmtDate(s.converted.rates_updated_at)})`) : null),
+    withdrawCard,
     h('div', { class: 'notice', style: 'margin-bottom:16px' },
       h('b', null, 'Rates: '), `Shorts ${inr(s.rates.short_per_1000 * 5)} per 5,000 eligible views · Long videos ${inr(s.rates.long_per_1000)} per 1,000 eligible views. `,
       'Figures are estimates until approved. Only genuine, unique-viewer views count.'));
@@ -117,7 +129,7 @@ async function history(body) {
   body.append(h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
     h('thead', null, h('tr', null, ...['Date', 'Amount', 'Method', 'Status', 'Reference'].map((x) => h('th', null, x)))),
     h('tbody', null, ...d.items.map((p) => h('tr', null,
-      h('td', null, fmtDate(p.paid_at || p.created_at)), h('td', null, inr(p.amount)),
+      h('td', null, fmtDate(p.paid_at || p.created_at), p.source === 'request' ? h('div', { class: 'muted small' }, 'Withdrawal request') : null), h('td', null, inr(p.amount)),
       h('td', null, p.method_masked ? `${p.method_type === 'upi' ? 'UPI' : (p.method_asset || '').toUpperCase()} ${p.method_masked}` : '—'),
       h('td', null, h('span', { class: `status ${p.status === 'paid' ? 'approved' : p.status === 'failed' ? 'rejected' : 'pending'}` }, p.display_status),
         p.failure_reason ? h('div', { class: 'muted small' }, p.failure_reason) : null, p.hold_reason ? h('div', { class: 'muted small' }, p.hold_reason) : null),

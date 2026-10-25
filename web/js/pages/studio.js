@@ -3,6 +3,7 @@ import { api, state, refreshMe, upload } from '../api.js';
 import { navigate } from '../router.js';
 import { emptyState } from '../cards.js';
 import { thumbnailPicker } from '../thumbnailPicker.js';
+import { studioTabs } from '../creatorNav.js';
 
 const STATUS_HELP = {
   pending: 'Your creator application is Pending Review. An administrator will approve or reject it. You cannot upload until it is approved.',
@@ -29,13 +30,13 @@ export default async function studio({ root }) {
     return;
   }
   const ch = state.channel;
+  if (ch.status === 'approved') page.append(studioTabs('videos'));
   page.append(h('div', { class: `notice ${ch.status === 'approved' ? 'good' : ch.status === 'pending' ? 'warn' : 'bad'}`, style: 'margin-bottom:16px' },
     h('div', { class: 'row wrap' }, statusPill(ch.status), h('b', null, `${ch.name} · @${ch.handle}`)),
     h('p', { style: 'margin-top:6px' }, STATUS_HELP[ch.status]),
     ch.status_reason ? h('p', { class: 'muted', style: 'margin-top:4px' }, `Reason: ${ch.status_reason}`) : null,
     h('div', { class: 'row wrap', style: 'margin-top:10px' },
       ch.status === 'approved' ? h('a', { class: 'btn primary sm', href: '/upload' }, icon('upload'), 'Upload') : null,
-      ch.status === 'approved' ? h('a', { class: 'btn sm', href: '/studio/earnings' }, 'Earnings & payments') : null,
       h('a', { class: 'btn sm', href: '/studio/channel' }, icon('edit'), ch.status === 'rejected' ? 'Edit & resubmit' : 'Edit channel'),
       ch.status === 'approved' ? h('a', { class: 'btn sm', href: `/c/${ch.handle}` }, 'View channel') : null)));
 

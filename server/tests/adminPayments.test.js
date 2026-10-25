@@ -196,3 +196,52 @@ describe('adjustments, reconciliation, exports, rates', () => {
     assert.equal(s.body.cards.paid_total, 0);
   });
 });
+
+describe('withdrawal requests and creator earnings list', () => {
+  test('creator requests a withdrawal; admin sees, approves and pays it; money is never double-counted', async () => {
+    await reset();
+    const admin = await makeAdmin();
+    const c = await funded(750);
+    const low = await funded(200);
+
+    assert.equal((await client().post('/api/me/withdrawals', {})).status, 401);
+    const blocked = await low.client.post('/api/me/withdrawals', {});
+    assert.equal(blocked.status, 400);
+    assert.match(blocked.body.error.message, /minimum/);
+    assert.equal((await c.client.get('/api/me/withdrawal')).body.can_request, true);
+
+    const [a, b] = await Promise.all([c.client.post('/api/me/withdrawals', {}), c.client.post('/api/me/withdrawals', {})]);
+    assert.deepEqual([a.status, b.status].sort(), [201, 400], 'a double click creates exactly one request');
+    assert.equal(E.round2((await E.balanceFor(c.channelId)).payable), 0, 'the balance is spoken for');
+
+    const list = await admin.client.get(P + '/payouts?source=request');
+    assert.equal(list.body.items.length, 1);
+    assert.equal(list.body.items[0].amount, 750);
+    assert.equal(list.body.items[0].source, 'request');
+    assert.equal((await admin.client.get(P + '/summary')).body.cards.requests_waiting, 1);
+
+    // a monthly batch must not pick the same money up again
+    const batch = await admin.client.post(P + '/batches', { period_start: periodStart() });
+    assert.equal(batch.body.batch.payout_count, 0);
+
+    const id = list.body.items[0].id;
+    assert.equal((await admin.client.post(`${P}/payouts/${id}/transition`, { to: 'approved' })).status, 200);
+    assert.equal((await admin.client.post(`${P}/payouts/${id}/transition`, { to: 'processing' })).status, 200);
+    assert.equal((await admin.client.post(`${P}/payouts/${id}/transition`, { to: 'paid', transaction_ref: 'UTR55' })).status, 200);
+    assert.equal((await c.client.get('/api/me/payouts')).body.items[0].display_status, 'Paid');
+  });
+
+  test('admin sees every creator with their earnings; others cannot', async () => {
+    await reset();
+    const admin = await makeAdmin();
+    const a = await funded(900);
+    await funded(100);
+    const r = await admin.client.get(P + '/creators?sort=payable');
+    assert.equal(r.status, 200);
+    assert.equal(r.body.items[0].channel_id, a.channelId);
+    assert.equal(r.body.items[0].payable, 900);
+    assert.equal(r.body.items[0].meets_minimum, true);
+    assert.equal((await admin.client.get(P + '/creators?q=zzzznomatch')).body.items.length, 0);
+    assert.equal((await (await makeAdmin({ role: 'moderator' })).client.get(P + '/creators')).status, 403);
+  });
+});

@@ -98,7 +98,6 @@ function userArea() {
     h('hr'),
     h('a', { href: myChannelHref() }, icon('user'), 'My channel'),
     h('a', { href: '/studio' }, icon('film'), 'Creator studio'),
-    state.channel?.status === 'approved' ? h('a', { href: '/studio/earnings' }, icon('sliders'), 'Earnings & payments') : null,
     h('a', { href: '/saved' }, icon('bookmark'), 'Saved videos'),
     h('a', { href: '/settings' }, icon('sliders'), 'Settings'),
     h('hr'),

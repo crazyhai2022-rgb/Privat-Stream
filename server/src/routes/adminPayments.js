@@ -37,7 +37,8 @@ r.get('/summary', wrap(async (req, res) => {
        (select coalesce(sum(amount),0) from payouts where status = 'failed') as failed,
        (select coalesce(sum(amount),0) from payouts where status = 'paid') as paid_total,
        (select coalesce(sum(amount),0) from payouts where status = 'paid' and paid_at >= date_trunc('month', now())) as paid_this_month,
-       (select count(*)::int from payout_methods where status = 'pending') as methods_pending`);
+       (select count(*)::int from payout_methods where status = 'pending') as methods_pending,
+       (select count(*)::int from payouts where source = 'request' and status = 'eligible') as requests_waiting`);
   const eligible = await db.one(
     `select count(*)::int as n, coalesce(sum(p),0) as total from (
        select c.id, coalesce((select sum(amount) from earning_entries e where e.channel_id = c.id and e.status = 'approved' and e.payout_id is null),0)
@@ -59,13 +60,41 @@ r.get('/summary', wrap(async (req, res) => {
       where p.status = 'paid' group by c.id order by 4 desc limit 10`);
   res.json({
     currency: 'INR', min_payout: num(m.min_payout), next_payout_date: nextPayoutDate(m.payout_day),
-    cards: Object.fromEntries(Object.entries(cards).map(([k, v]) => [k, k === 'methods_pending' ? v : money(v)])),
+    cards: Object.fromEntries(Object.entries(cards).map(([k, v]) => [k, ['methods_pending', 'requests_waiting'].includes(k) ? v : money(v)])),
     eligible: { channels: eligible.n, amount: money(eligible.total) },
     monthly: monthly.map((x) => ({ ...x, amount: money(x.amount) })),
     daily: daily.map((x) => ({ day: x.day, short: money(x.short), long: money(x.long) })),
     by_status: byStatus.map((x) => ({ ...x, amount: money(x.amount) })),
     by_method: methods.map((x) => ({ ...x, amount: money(x.amount) })),
     top_creators: top.map((x) => ({ ...x, amount: money(x.amount) })),
+  });
+}));
+
+// ---------------- Every creator's earnings ----------------
+r.get('/creators', wrap(async (req, res) => {
+  const { limit, offset, page } = paging(req);
+  const sort = { payable: 'payable', lifetime: 'lifetime', paid: 'paid', pending: 'pending' }[req.query.sort] || 'lifetime';
+  const params = [];
+  let q = '';
+  if (req.query.q) { params.push(like(req.query.q)); q = `where c.name ilike $1 or c.handle ilike $1 or u.email ilike $1`; }
+  params.push(limit + 1, offset);
+  const rows = await db.query(
+    `select c.id as channel_id, c.name, c.handle, c.status as channel_status, u.email,
+            coalesce((select sum(amount) from earning_entries e where e.channel_id = c.id and e.status <> 'invalidated'),0) as lifetime,
+            coalesce((select sum(amount) from earning_entries e where e.channel_id = c.id and e.status = 'pending'),0) as pending,
+            coalesce((select sum(amount) from earning_entries e where e.channel_id = c.id and e.status = 'approved' and e.payout_id is null),0)
+          + coalesce((select sum(amount) from payout_adjustments a where a.channel_id = c.id and a.payout_id is null),0) as payable,
+            coalesce((select sum(amount) from payouts p where p.channel_id = c.id and p.status in ('eligible','approved','processing','on_hold')),0) as in_flight,
+            coalesce((select sum(amount) from payouts p where p.channel_id = c.id and p.status = 'paid'),0) as paid,
+            coalesce((select sum(eligible_views) from earning_entries e where e.channel_id = c.id and e.status <> 'invalidated'),0)::bigint as eligible_views,
+            (select status from payout_methods pm where pm.channel_id = c.id and pm.is_default limit 1) as method_status
+       from channels c join users u on u.id = c.user_id ${q}
+      order by ${sort} desc, c.name limit $${params.length - 1} offset $${params.length}`, params);
+  const m = await getSetting('monetization');
+  res.json({
+    items: rows.slice(0, limit).map((x) => ({ ...x, lifetime: money(x.lifetime), pending: money(x.pending), payable: money(x.payable), in_flight: money(x.in_flight),
+      paid: money(x.paid), eligible_views: Number(x.eligible_views), meets_minimum: num(x.payable) >= num(m.min_payout) })),
+    has_more: rows.length > limit, page, min_payout: num(m.min_payout),
   });
 }));
 
@@ -214,7 +243,7 @@ const payoutDto = (p) => ({
   id: p.id, batch_id: p.batch_id, channel_id: p.channel_id, channel_name: p.channel_name, handle: p.handle,
   amount: money(p.amount), currency: p.currency, status: p.status, method_id: p.method_id, method_type: p.method_type,
   method_masked: p.method_masked, method_asset: p.method_asset, method_network: p.method_network,
-  method_status: p.method_status || null, transaction_ref: p.transaction_ref, tx_hash: p.tx_hash, tx_network: p.tx_network,
+  source: p.source, method_status: p.method_status || null, transaction_ref: p.transaction_ref, tx_hash: p.tx_hash, tx_network: p.tx_network,
   paid_currency: p.paid_currency, paid_amount: p.paid_amount === null || p.paid_amount === undefined ? null : num(p.paid_amount),
   exchange_rate: p.exchange_rate === null || p.exchange_rate === undefined ? null : num(p.exchange_rate), fees: money(p.fees),
   failure_reason: p.failure_reason, hold_reason: p.hold_reason, note: p.note, paid_at: p.paid_at, created_at: p.created_at,
@@ -226,6 +255,7 @@ r.get('/payouts', wrap(async (req, res) => {
   const params = [];
   const where = [];
   if (req.query.status) { params.push(String(req.query.status)); where.push(`p.status = $${params.length}`); }
+  if (req.query.source === 'request') where.push(`p.source = 'request'`);
   if (req.query.q) { params.push(like(req.query.q)); where.push(`(c.name ilike $${params.length} or c.handle ilike $${params.length})`); }
   if (isDay(req.query.from)) { params.push(req.query.from); where.push(`p.created_at >= $${params.length}::date`); }
   if (isDay(req.query.to)) { params.push(req.query.to); where.push(`p.created_at < $${params.length}::date + 1`); }

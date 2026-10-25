@@ -163,9 +163,10 @@ export async function approveDueEntries() {
  * A channel's money position. All of it is derived from the ledger, never stored
  * as a running total that could drift.
  */
-export async function balanceFor(channelId) {
-  const m = await getSetting('monetization');
-  const e = await db.one(
+export async function balanceFor(channelId, { q = (sql, p) => db.query(sql, p), settings = null } = {}) {
+  const one = async (sql, p) => (await q(sql, p))[0];
+  const m = settings || await getSetting('monetization');
+  const e = await one(
     `select
        coalesce(sum(amount) filter (where status = 'pending'), 0) as pending,
        coalesce(sum(amount) filter (where status = 'approved' and payout_id is null), 0) as approved_unpaid,
@@ -173,11 +174,11 @@ export async function balanceFor(channelId) {
        coalesce(sum(amount) filter (where status <> 'invalidated'), 0) as lifetime,
        coalesce(sum(eligible_views) filter (where status <> 'invalidated'), 0)::int as eligible_views
      from earning_entries where channel_id = $1`, [channelId]);
-  const adj = await db.one(
+  const adj = await one(
     `select coalesce(sum(amount) filter (where payout_id is null), 0) as unpaid,
             coalesce(sum(amount), 0) as total
        from payout_adjustments where channel_id = $1`, [channelId]);
-  const paid = await db.one(
+  const paid = await one(
     `select coalesce(sum(amount) filter (where status = 'paid'), 0) as paid,
             coalesce(sum(amount) filter (where status in ('eligible','approved','processing')), 0) as in_flight,
             coalesce(sum(amount) filter (where status = 'on_hold'), 0) as on_hold
@@ -391,4 +392,44 @@ export async function runEarningsMaintenance({ days = 3 } = {}) {
   const aggregated = await aggregateRecent(days);
   const approved = await approveDueEntries();
   return { aggregated, approved };
+}
+
+// ---------------------------------------------------------------------------
+// Withdrawal requests
+// ---------------------------------------------------------------------------
+
+/** Why a creator cannot ask for a withdrawal right now, or null when they can. */
+export async function withdrawalBlocker(channelId, { q = (sql, p) => db.query(sql, p), settings = null } = {}) {
+  const bal = await balanceFor(channelId, { q, settings });
+  if (!bal.meets_minimum) return `Your payable balance is below the ${formatINR(bal.min_payout)} minimum. It carries forward until it reaches it.`;
+  const [open] = await q(`select id from payouts where channel_id = $1 and status in ('eligible','approved','processing','on_hold') limit 1`, [channelId]);
+  if (open) return 'You already have a withdrawal in progress. Wait for it to finish first.';
+  const [m] = await q(`select status from payout_methods where channel_id = $1 and is_default limit 1`, [channelId]);
+  if (!m) return 'Add a payment method first.';
+  if (m.status !== 'verified') return 'Your default payment method is not verified yet.';
+  return null;
+}
+
+/**
+ * Creates a payout for the whole payable balance on the creator's request. The money is attached in the
+ * same transaction, so it cannot also be paid by a monthly batch. An administrator still approves and pays it.
+ */
+export async function requestWithdrawal(channelId) {
+  const settings = await getSetting('monetization');   // read before the transaction: it holds the only connection
+  return db.tx(async (q) => {
+    await q('select id from channels where id = $1 for update', [channelId]);   // serialises double-clicks
+    const blocker = await withdrawalBlocker(channelId, { q, settings });
+    if (blocker) throw Object.assign(new Error(blocker), { status: 400, code: 'withdrawal_blocked' });
+    const [e] = await q(`select coalesce(sum(amount),0) as a from earning_entries where channel_id = $1 and status = 'approved' and payout_id is null`, [channelId]);
+    const [a] = await q(`select coalesce(sum(amount),0) as a from payout_adjustments where channel_id = $1 and payout_id is null`, [channelId]);
+    const payable = toMoney(e.a) + toMoney(a.a);
+    const [method] = await q(`select * from payout_methods where channel_id = $1 and is_default limit 1`, [channelId]);
+    const [p] = await q(
+      `insert into payouts (channel_id, amount, status, source, method_id, method_type, method_masked, method_asset, method_network, idempotency_key)
+       values ($1,$2,'eligible','request',$3,$4,$5,$6,$7,$8) returning *`,
+      [channelId, payable.toFixed(4), method.id, method.type, method.masked, method.asset, method.network, `req:${channelId}:${Date.now()}`]);
+    await q(`update earning_entries set payout_id = $2, updated_at = now() where channel_id = $1 and status = 'approved' and payout_id is null`, [channelId, p.id]);
+    await q(`update payout_adjustments set payout_id = $2 where channel_id = $1 and payout_id is null`, [channelId, p.id]);
+    return p;
+  });
 }

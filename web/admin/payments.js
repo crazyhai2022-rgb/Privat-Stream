@@ -12,7 +12,7 @@ const panel = (title, ...kids) => h('section', { class: 'panel' }, h('h3', null,
 const pill = (s) => h('span', { class: `status ${s}` }, String(s).replace(/_/g, ' '));
 const MID = '·';
 
-const TABS = [['overview', 'Overview'], ['eligibility', 'Eligibility'], ['methods', 'Payment methods'], ['batches', 'Monthly batches'],
+const TABS = [['overview', 'Overview'], ['creators', 'Creator earnings'], ['requests', 'Withdrawal requests'], ['eligibility', 'Eligibility'], ['methods', 'Payment methods'], ['batches', 'Monthly batches'],
   ['payouts', 'Payouts'], ['adjustments', 'Adjustments'], ['reconciliation', 'Reconciliation'], ['rates', 'Rates & rules']];
 
 function table(cols, rows) {
@@ -69,6 +69,7 @@ async function overview(body) {
       stat('Failed', inr(c.failed), 'Needs a retry or cancel'),
       stat('Paid this month', inr(c.paid_this_month)),
       stat('Paid to date', inr(c.paid_total)),
+      stat('Withdrawal requests', String(c.requests_waiting), 'Waiting for approval'),
       stat('Methods to review', String(c.methods_pending), 'Waiting for verification')),
     h('p', { class: 'muted small', style: 'margin:10px 0' }, `Next scheduled payout date: ${s.next_payout_date}. Minimum payout ${inr(s.min_payout)}; smaller balances are carried forward.`),
     panel('Paid per month (last 12 months)', s.monthly.length
@@ -85,6 +86,41 @@ async function overview(body) {
         s.by_method.map((x) => h('tr', null, h('td', null, x.method.replace(':', ' ').toUpperCase()), h('td', { class: 'num' }, x.n), h('td', { class: 'num' }, inr(x.amount))))))),
     panel('Top paid creators', table([{ label: 'Creator' }, { label: 'Paid', num: 1 }],
       s.top_creators.map((x) => h('tr', null, h('td', null, `${x.name} `, h('span', { class: 'muted' }, `@${x.handle}`)), h('td', { class: 'num' }, inr(x.amount)))))));
+}
+
+// ---------------------------------------------------------------------------
+async function creators(body) {
+  const st = { page: 0, sort: 'lifetime', q: '' };
+  const list = h('div');
+  const q = h('input', { class: 'input', placeholder: 'Search name, handle or email', style: 'max-width:260px' });
+  const sort = h('select', { class: 'select', style: 'max-width:200px' }, [['lifetime', 'Highest earnings'], ['payable', 'Highest payable'], ['paid', 'Most paid'], ['pending', 'Most pending']].map(([v, l]) => h('option', { value: v }, l)));
+  async function load() {
+    const d = await api.get('/api/admin/payments/creators' + qs({ page: st.page, sort: st.sort, q: st.q }));
+    list.replaceChildren(table([{ label: 'Creator' }, { label: 'Eligible views', num: 1 }, { label: 'Total earned', num: 1 }, { label: 'Pending', num: 1 }, { label: 'Payable', num: 1 }, { label: 'In payouts', num: 1 }, { label: 'Paid', num: 1 }, { label: 'Payment method' }],
+      d.items.map((x) => h('tr', null,
+        h('td', null, x.name, ' ', h('span', { class: 'muted' }, `@${x.handle}`), h('div', { class: 'muted small' }, x.email)),
+        h('td', { class: 'num' }, x.eligible_views.toLocaleString('en-IN')), h('td', { class: 'num' }, inr(x.lifetime)), h('td', { class: 'num' }, inr(x.pending)),
+        h('td', { class: 'num' }, inr(x.payable), x.meets_minimum ? h('div', { class: 'small', style: 'color:#7fd18f' }, 'Can withdraw') : null),
+        h('td', { class: 'num' }, inr(x.in_flight)), h('td', { class: 'num' }, inr(x.paid)),
+        h('td', null, x.method_status ? pill(x.method_status) : h('span', { class: 'muted' }, 'None'))))), pager(d, (p) => { st.page = p; load(); }));
+  }
+  sort.onchange = () => { st.sort = sort.value; st.page = 0; load(); };
+  q.onchange = () => { st.q = q.value.trim(); st.page = 0; load(); };
+  body.append(h('div', { class: 'row wrap', style: 'gap:8px;margin-bottom:10px' }, q, sort), list);
+  await load();
+}
+
+async function requests(body) {
+  const st = { page: 0, status: '' };
+  const list = h('div');
+  const sel = h('select', { class: 'select', style: 'max-width:200px' }, [['', 'All requests'], ['eligible', 'Waiting for approval'], ['approved', 'Approved'], ['processing', 'Processing'], ['paid', 'Paid'], ['failed', 'Failed'], ['on_hold', 'On hold'], ['cancelled', 'Cancelled']].map(([v, l]) => h('option', { value: v }, l)));
+  async function load() {
+    const d = await api.get('/api/admin/payments/payouts' + qs({ page: st.page, status: st.status, source: 'request' }));
+    list.replaceChildren(table(PAYOUT_COLS, payoutRows(d.items, load)), pager(d, (p) => { st.page = p; load(); }));
+  }
+  sel.onchange = () => { st.status = sel.value; st.page = 0; load(); };
+  body.append(h('p', { class: 'muted small', style: 'margin-bottom:10px' }, 'Creators ask for their full payable balance. Approve it, pay it outside the platform, then record the reference. Reject by cancelling with a reason; the money returns to the creator’s balance.'), h('div', { style: 'margin-bottom:10px' }, sel), list);
+  await load();
 }
 
 // ---------------------------------------------------------------------------
@@ -367,7 +403,7 @@ async function rates(body) {
 }
 
 // ---------------------------------------------------------------------------
-const VIEWS = { overview, eligibility, methods, batches, payouts, adjustments, reconciliation, rates };
+const VIEWS = { overview, creators, requests, eligibility, methods, batches, payouts, adjustments, reconciliation, rates };
 
 export async function paymentsPage(sub, id) {
   const tab = VIEWS[sub] ? sub : 'overview';

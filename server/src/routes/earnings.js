@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { wrap, badRequest, forbidden, notFound, conflict } from '../lib/errors.js';
 import { requireAuth } from '../middleware/core.js';
-import { balanceFor, round2, toMoney, formatINR } from '../services/earnings.js';
+import { balanceFor, round2, toMoney, formatINR, withdrawalBlocker, requestWithdrawal } from '../services/earnings.js';
 import { getSetting } from '../services/settings.js';
 import { addMethod, listMethods, methodDto, CRYPTO_OPTIONS } from '../services/paymentMethods.js';
 import { audit } from '../services/audit.js';
@@ -129,12 +129,25 @@ r.get('/me/earnings/videos', requireAuth, wrap(async (req, res) => {
   res.json({ from, to, items: rows.map((x) => ({ ...x, estimated: round2(x.estimated) })) });
 }));
 
+r.get('/me/withdrawal', requireAuth, wrap(async (req, res) => {
+  const ch = await myChannel(req);
+  const blocker = await withdrawalBlocker(ch.id);
+  res.json({ can_request: !blocker, reason: blocker });
+}));
+
+r.post('/me/withdrawals', requireAuth, wrap(async (req, res) => {
+  const ch = await myChannel(req);
+  const p = await requestWithdrawal(ch.id);
+  await audit(req, 'withdrawal.request', 'payout', p.id, { amount: round2(p.amount), channel_id: ch.id });
+  res.status(201).json({ payout: { id: p.id, amount: round2(p.amount), status: p.status } });
+}));
+
 r.get('/me/payouts', requireAuth, wrap(async (req, res) => {
   const ch = await myChannel(req);
   const page = Math.max(1, Number(req.query.page) || 1), size = 20;
   const rows = await db.query(
     `select id, amount, currency, status, method_type, method_masked, method_asset, method_network,
-            paid_at, transaction_ref, tx_hash, failure_reason, hold_reason, created_at
+            paid_at, transaction_ref, tx_hash, failure_reason, hold_reason, created_at, source
        from payouts where channel_id = $1 order by created_at desc limit $2 offset $3`, [ch.id, size, (page - 1) * size]);
   const [{ n }] = await db.query('select count(*)::int as n from payouts where channel_id = $1', [ch.id]);
   res.json({
@@ -142,7 +155,7 @@ r.get('/me/payouts', requireAuth, wrap(async (req, res) => {
     items: rows.map((p) => ({
       ...p, amount: round2(p.amount),
       // Creators see a plain status; internal workflow states are folded together.
-      display_status: { eligible: 'Scheduled', approved: 'Approved', processing: 'Processing', paid: 'Paid',
+      display_status: { eligible: 'Requested — waiting for approval', approved: 'Approved', processing: 'Processing', paid: 'Paid',
         failed: 'Failed — will be retried', on_hold: 'On hold', cancelled: 'Cancelled' }[p.status] || p.status,
     })),
   });

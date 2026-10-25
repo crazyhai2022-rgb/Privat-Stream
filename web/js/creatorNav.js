@@ -7,3 +7,11 @@ export function creatorTabs(active) {
     tab('upload', '/upload', 'Upload', 'upload'), tab('research', '/research', 'Research', 'search'),
     h('a', { href: '/studio/earnings' }, icon('sliders'), 'Earnings'), h('a', { href: '/studio' }, icon('film'), 'Studio'));
 }
+
+/** Creator studio tabs: videos, earnings and payments all live under the studio. */
+export function studioTabs(active) {
+  const t = (key, href, label) => h('a', { href, class: key === active ? 'on' : '', 'aria-current': key === active ? 'page' : null }, label);
+  return h('nav', { class: 'tabs studio-tabs', 'aria-label': 'Creator studio' },
+    t('videos', '/studio', 'Videos'), t('overview', '/studio/earnings', 'Earnings'),
+    t('payouts', '/studio/payouts', 'Payment history'), t('settings', '/studio/payments', 'Payment settings'));
+}
