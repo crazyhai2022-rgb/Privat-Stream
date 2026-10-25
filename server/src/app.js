@@ -9,6 +9,7 @@ import channelRoutes from './routes/channels.js';
 import videoRoutes from './routes/videos.js';
 import engagementRoutes from './routes/engagement.js';
 import adminRoutes from './routes/admin.js';
+import adminPaymentRoutes from './routes/adminPayments.js';
 import earningsRoutes from './routes/earnings.js';
 import researchRoutes from './routes/research.js';
 import { api as publicApi, media } from './routes/public.js';
@@ -56,6 +57,7 @@ export function createApp() {
   app.use('/api', limiter({ windowMs: 60e3, max: 600 }));
   app.use('/api', csrfGuard);
   app.use('/api/auth', authRoutes);
+  app.use('/api/admin/payments', adminPaymentRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api', publicApi);
   app.use('/api', channelRoutes);

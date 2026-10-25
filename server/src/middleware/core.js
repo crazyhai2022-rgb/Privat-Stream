@@ -133,6 +133,10 @@ export function errorHandler(err, req, res, _next) { // eslint-disable-line no-u
   if (err instanceof HttpError) {
     return res.status(err.status).json({ error: { code: err.code, message: err.message, details: err.details } });
   }
+  // Service-layer errors that carry their own client status (state-machine and validation failures).
+  if (Number.isInteger(err?.status) && err.status >= 400 && err.status < 500 && err.code) {
+    return res.status(err.status).json({ error: { code: err.code, message: err.message } });
+  }
   if (err instanceof multer.MulterError) {
     const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
     const message = err.code === 'LIMIT_FILE_SIZE' ? 'File is larger than the allowed size' : `Upload error: ${err.message}`;

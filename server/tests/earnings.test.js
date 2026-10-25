@@ -277,11 +277,16 @@ describe('the ₹500 threshold and carry-forward', () => {
     assert.equal(E.round2(await payableOf(c.channelId)), 0);
   });
 
-  test('a batch that is no longer a draft refuses to be rebuilt', async () => {
+  test('a batch whose payouts are already being acted on refuses to be rebuilt', async () => {
     await resetLedger();
     const period = firstOfMonth(dayStr(20));
-    await E.buildBatch({ periodStart: period });                 // leaves it in "review"
-    await assert.rejects(() => E.buildBatch({ periodStart: period }), /already exists and is review/);
+    const c = await creatorWithBalance(900);
+    const batch = await E.buildBatch({ periodStart: period });  // leaves it in "review"
+    const again = await E.buildBatch({ periodStart: period });  // still untouched, so a rebuild is fine
+    assert.equal(E.round2(again.total_amount), 900);
+    const p = await db.one('select id from payouts where batch_id = $1 and channel_id = $2', [batch.id, c.channelId]);
+    await E.transitionPayout(p.id, 'approved', {});
+    await assert.rejects(() => E.buildBatch({ periodStart: period }), /already has approved or processed/);
   });
 
   test('adjustments join the balance and are paid with it', async () => {
@@ -377,8 +382,8 @@ describe('payout states', () => {
 });
 
 describe('scheduling', () => {
-  test('the next payout is the 7th of the coming month', () => {
-    assert.equal(E.nextPayoutDate(7, new Date('2026-03-01T00:00:00Z')), '2026-03-07');
+  test('the next payout is the 7th of the coming month, moved to Monday when it falls on a weekend', () => {
+    assert.equal(E.nextPayoutDate(7, new Date('2026-03-01T00:00:00Z')), '2026-03-09'); // 7 March 2026 is a Saturday
     assert.equal(E.nextPayoutDate(7, new Date('2026-03-07T12:00:00Z')), '2026-04-07');
     assert.equal(E.nextPayoutDate(7, new Date('2026-12-20T00:00:00Z')), '2027-01-07');
   });

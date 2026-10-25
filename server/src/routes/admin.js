@@ -11,6 +11,7 @@ import { normalizeTelegramUrl } from '../services/telegram.js';
 import { listVideos, videoDto, getVideoRowByPublicId, recountVideo, trendingScoreFor, SORTS } from '../services/videos.js';
 import { imageUrl } from '../services/serializers.js';
 import { getStorage } from '../storage/index.js';
+import { recordRateChange } from '../services/earnings.js';
 
 const r = Router();
 
@@ -506,6 +507,12 @@ r.put('/settings/:key', requireAdmin('settings'), wrap(async (req, res) => {
   const old = (await getSettings())[key];
   const saved = await setSetting(key, value, req.admin.id);
   await audit(req, 'settings.update', 'setting', key, { before: old, after: saved });
+  if (key === 'monetization') {
+    for (const kind of ['short', 'long']) {
+      const f = `rate_${kind}_per_1000`;
+      if (Number(old?.[f]) !== Number(saved[f])) await recordRateChange({ kind, rate: saved[f], adminId: req.admin.id, note: 'Changed in platform settings' });
+    }
+  }
   res.json({ ok: true, value: saved });
 }));
 

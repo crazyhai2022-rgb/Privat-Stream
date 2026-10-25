@@ -1,6 +1,7 @@
 // Super Admin panel: separate login (admin session cookie), role-aware navigation, real data only.
 import { h, icon, brandWordmark, passwordInput, toast, confirmDialog, openModal, fmtCount, fmtDateTime, timeAgo, statusPill, statusLabel, fmtDur, qs, initials } from '../js/util.js';
 import { api, state, ApiError } from '../js/api.js';
+import { paymentsPage } from './payments.js';
 
 const app = document.getElementById('app');
 const BRAND = () => state.config?.brand?.name || 'viralX';
@@ -12,6 +13,7 @@ const PAGES = [
   ['videos', 'Video moderation', 'film', 'videos'],
   ['reports', 'Reports', 'flag', 'reports'],
   ['popularity', 'Popularity', 'heart', 'popularity'],
+  ['payments', 'Creator payments', 'tag', 'payments'],
   ['users', 'Users', 'user', 'users'],
   ['categories', 'Categories & tags', 'tag', 'categories'],
   ['settings', 'Platform settings', 'sliders', 'settings'],
@@ -658,7 +660,8 @@ async function audit() {
   await load();
 }
 
-const VIEWS = { dashboard, creators, videos: videosPage, reports, popularity, users, categories: categoriesPage, settings: settingsPage, audit };
+async function payments(sub, id) { bodyEl.replaceChildren(await paymentsPage(sub, id)); }
+const VIEWS = { dashboard, payments, creators, videos: videosPage, reports, popularity, users, categories: categoriesPage, settings: settingsPage, audit };
 
 async function render() {
   if (!state.config) { try { state.config = await api.get('/api/config'); } catch { /* optional */ } }
@@ -674,7 +677,7 @@ async function render() {
     } catch { return loginView(); }
   }
   shell();
-  const [key, sub] = route();
+  const [key, sub, rid] = route();
   const def = PAGES.find(([, , , p]) => can(p));
   const entry = PAGES.find(([k, , , p]) => k === key && can(p)) || def;
   if (!entry) { bodyEl.replaceChildren(h('div', { class: 'empty' }, h('h3', null, 'No access'), h('p', null, 'Your role has no permissions.'))); return; }
@@ -682,7 +685,7 @@ async function render() {
   document.title = `${entry[1]} · ${BRAND()} Admin`;
   sideEl.querySelectorAll('a[data-key]').forEach((a) => a.classList.toggle('on', a.dataset.key === entry[0]));
   refreshBadges();
-  try { await VIEWS[entry[0]](sub); } catch (e) {
+  try { await VIEWS[entry[0]](sub, rid); } catch (e) {
     if (e instanceof ApiError && e.status === 401) { S.admin = null; return loginView(); }
     bodyEl.replaceChildren(h('div', { class: 'empty' }, h('h3', null, 'Could not load this page'), h('p', null, e.message)));
   }

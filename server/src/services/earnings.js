@@ -209,7 +209,7 @@ export async function balanceFor(channelId) {
 export function nextPayoutDate(payoutDay = 7, from = new Date()) {
   const d = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), payoutDay));
   if (d <= from) d.setUTCMonth(d.getUTCMonth() + 1);
-  return d.toISOString().slice(0, 10);
+  return nextBusinessDay(d.toISOString().slice(0, 10));
 }
 
 /** First and last day of the month that a batch scheduled on `scheduledFor` pays for. */
@@ -242,8 +242,13 @@ export async function buildBatch({ periodStart, scheduledFor, adminId }) {
 
   return db.tx(async (q) => {
     const [existing] = await q('select * from payout_batches where period_start = $1', [period.period_start]);
-    if (existing && existing.status !== 'draft') {
+    if (existing && !['draft', 'review'].includes(existing.status)) {
       throw Object.assign(new Error(`A batch for ${period.period_start} already exists and is ${existing.status}`), { code: 'batch_exists' });
+    }
+    if (existing) {
+      // A batch under review may be rebuilt, but only while nobody has started acting on it.
+      const [{ n }] = await q(`select count(*)::int as n from payouts where batch_id = $1 and status <> 'eligible'`, [existing.id]);
+      if (n) throw Object.assign(new Error(`The batch for ${period.period_start} already has approved or processed payouts`), { code: 'batch_exists' });
     }
     let batch = existing;
     if (!batch) {
@@ -270,7 +275,7 @@ export async function buildBatch({ periodStart, scheduledFor, adminId }) {
                      where status = 'approved' and payout_id is null and day <= $1::date
                      group by channel_id) e on e.channel_id = c.id
          left join (select channel_id, sum(amount) as amount from payout_adjustments
-                     where payout_id is null and created_at < ($1::date + 1) group by channel_id) a on a.channel_id = c.id
+                     where payout_id is null group by channel_id) a on a.channel_id = c.id
         where coalesce(e.amount, 0) + coalesce(a.amount, 0) > 0`,
       [period.period_end]);
 
@@ -292,8 +297,8 @@ export async function buildBatch({ periodStart, scheduledFor, adminId }) {
                 where channel_id = $1 and status = 'approved' and payout_id is null and day <= $3::date`,
         [c.channel_id, payout.id, period.period_end]);
       await q(`update payout_adjustments set payout_id = $2
-                where channel_id = $1 and payout_id is null and created_at < ($3::date + 1)`,
-        [c.channel_id, payout.id, period.period_end]);
+                where channel_id = $1 and payout_id is null`,
+        [c.channel_id, payout.id]);
 
       total += payable; count++;
     }
@@ -311,9 +316,15 @@ const lastDayOfMonth = (dateStr) => {
   const d = new Date(dateStr + 'T00:00:00Z');
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
 };
+/** Weekend dates roll forward to Monday, so a batch is never scheduled for a day banks are closed. */
+export function nextBusinessDay(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
 const scheduledForPeriod = (periodStart, payoutDay) => {
   const d = new Date(periodStart + 'T00:00:00Z');
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, payoutDay)).toISOString().slice(0, 10);
+  return nextBusinessDay(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, payoutDay)).toISOString().slice(0, 10));
 };
 
 // ---------------------------------------------------------------------------
