@@ -9,6 +9,7 @@ import { SORT_LABELS } from '../listing.js';
 const TITLE_MAX = 32;        // longer titles are cut here and end in "..."
 const SEEK_SECONDS = 10;     // double-tap / double-click skips this far
 const DOUBLE_TAP_MS = 280;   // how quickly the second tap must follow the first
+const PRELOAD_SECONDS = 12;  // how much of each upcoming Short is buffered before it is shown
 
 let muted = true; // starts muted (browser autoplay rules + no surprise audio); stays unmuted once the user chooses
 
@@ -25,7 +26,8 @@ export default async function shorts({ root, params, query }) {
   const items = [];
   let active = -1, page = 0, hasMore = true, loadingMore = false, destroyed = false;
   const timers = new Map();
-  let stalls = 0, syncingMute = false;
+  let syncingMute = false;
+  const stallTimes = []; // when real playback stalls happened (after the first second of a Short)
 
   // ---------- data ----------
   // The default feed is "For you" (a mix of what you watch, what is new and something different).
@@ -164,9 +166,8 @@ export default async function shorts({ root, params, query }) {
       spinTimer = setTimeout(() => { spinTimer = null; if (!video.paused && video.readyState < 3) spinner.hidden = false; }, 300);
     };
     const hideSpin = () => { clearTimeout(spinTimer); spinTimer = null; spinner.hidden = true; };
-    const stalled = () => { if (nodes[active] === node && !video.paused) { if (video.readyState < 3) stalls++; node.showSpin(); } };
+    const stalled = () => { if (nodes[active] === node && !video.paused) { if (video.readyState < 3 && video.currentTime > 1) stallTimes.push(Date.now()); node.showSpin(); } };
     video.addEventListener('waiting', stalled);
-    video.addEventListener('stalled', stalled);
     for (const ev of ['playing', 'canplay', 'seeked', 'pause', 'emptied']) video.addEventListener(ev, hideSpin);
     const drawBuffer = () => {
       if (!video.duration) return;
@@ -175,6 +176,7 @@ export default async function shorts({ root, params, query }) {
       bufferBar.style.width = Math.min(100, (end / video.duration) * 100) + '%';
     };
     video.addEventListener('progress', drawBuffer);
+    for (const ev of ['progress', 'loadedmetadata', 'canplay', 'canplaythrough']) video.addEventListener(ev, schedulePump);
     video.addEventListener('timeupdate', drawBuffer);
     video.addEventListener('playing', () => { node.retries = 0; node.error = false; });
 
@@ -240,16 +242,64 @@ export default async function shorts({ root, params, query }) {
   // How much to load ahead depends on the connection: nothing extra on Data Saver / 2G or after repeated stalls.
   function netTier() {
     const c = navigator.connection;
-    if (stalls >= 3 || c?.saveData || /(^|slow-)2g/.test(c?.effectiveType || '')) return 'low';
+    while (stallTimes.length && Date.now() - stallTimes[0] > 30000) stallTimes.shift();
+    if (stallTimes.length >= 3 || c?.saveData || /(^|slow-)2g/.test(c?.effectiveType || '')) return 'low';
     if (c?.effectiveType === '4g' && (c.downlink || 10) >= 5) return 'high';
     return 'mid';
   }
-  function preloadAhead(i) {
-    const tier = netTier();
-    const next = nodes[i + 1], after = nodes[i + 2];
-    if (next) ensureSrc(next, tier === 'low' ? 'metadata' : 'auto');
-    if (after) ensureSrc(after, tier === 'high' ? 'auto' : 'metadata');
-    return tier === 'low' ? 2 : 3;
+  // ---- Background preloading ----------------------------------------------------------------
+  // The upcoming Shorts are loaded while the current one plays, so swiping to the next one starts instantly:
+  //  * every Short within reach gets its <video> source early, which fetches the header (duration / size);
+  //  * then they are filled one at a time, nearest first, until PRELOAD_SECONDS (12 s) of each is buffered;
+  //  * the Short you are watching always has priority: nothing new is requested while it is still short of data;
+  //  * Data Saver / slow connections only fetch the header of the next Short, and repeated stalls reduce the reach.
+  const bufferedAhead = (vid) => {
+    const t = vid.currentTime || 0;
+    for (let k = 0; k < vid.buffered.length; k++) if (vid.buffered.start(k) <= t + 0.3 && vid.buffered.end(k) >= t) return vid.buffered.end(k) - t;
+    return 0;
+  };
+  const isBuffered = (node) => {
+    const vid = node.video;
+    const len = vid.duration > 0 ? vid.duration : (node.v.duration || PRELOAD_SECONDS);
+    return vid.readyState >= 1 && bufferedAhead(vid) >= Math.max(1, Math.min(PRELOAD_SECONDS, len - 0.5));
+  };
+  const reach = () => { const t = netTier(); return t === 'low' ? 1 : t === 'high' ? 3 : 2; };
+  let pumpTimer = 0;
+  function schedulePump() { if (pumpTimer || destroyed) return; pumpTimer = setTimeout(() => { pumpTimer = 0; pump(); }, 120); }
+  // A paused <video> only buffers a fraction of a second in most browsers, whatever "preload" says. So the one
+  // that is being filled is "warmed": played muted at the slowest speed (it barely moves), which makes the browser
+  // download ahead the same way it does for real playback. It is paused again as soon as PRELOAD_SECONDS are in.
+  function warm(node) {
+    if (node.warming) return;
+    const vid = node.video;
+    node.warming = true;
+    vid.muted = true;
+    try { vid.playbackRate = 0.0625; } catch { try { vid.playbackRate = 0.25; } catch { /* default speed */ } }
+    const p = vid.play();
+    if (p && p.catch) p.catch(() => { node.warming = false; vid.playbackRate = 1; });
+  }
+  function unwarm(node) {
+    if (!node.warming) return;
+    node.warming = false;
+    const vid = node.video;
+    vid.pause(); vid.playbackRate = 1;
+    if (vid.currentTime > 0) { try { vid.currentTime = 0; } catch { /* not seekable yet */ } }
+  }
+  function pump() {
+    if (destroyed || active < 0) return 0;
+    const tier = netTier(), depth = reach();
+    const cur = nodes[active];
+    const curOk = !cur || cur.video.paused || cur.video.readyState >= 4 || bufferedAhead(cur.video) >= 4;
+    let filling = false;
+    nodes.forEach((n, k) => { if (n.warming && (k <= active || k > active + depth || !curOk || tier === 'low')) unwarm(n); });
+    for (let k = 1; k <= depth; k++) {
+      const n = nodes[active + k];
+      if (!n) break;
+      if (tier === 'low') { ensureSrc(n, 'metadata'); break; }
+      if (isBuffered(n)) { unwarm(n); ensureSrc(n, 'metadata'); continue; }
+      if (!filling && curOk) { ensureSrc(n, 'auto'); warm(n); filling = true; } else { unwarm(n); ensureSrc(n, 'metadata'); }
+    }
+    return depth;
   }
   function ensureSrc(node, preload = 'metadata') {
     if (!node.v.stream_url) return;
@@ -258,6 +308,7 @@ export default async function shorts({ root, params, query }) {
     node.video.preload = preload;
   }
   function release(node) {
+    node.warming = false; node.video.playbackRate = 1;
     if (node.video.getAttribute('src')) { node.video.pause(); node.video.removeAttribute('src'); node.video.load(); }
   }
   async function playNode(node) {
@@ -293,11 +344,12 @@ export default async function shorts({ root, params, query }) {
   function activate(i) {
     if (i === active || i < 0 || i >= nodes.length) return;
     const prev = nodes[active];
-    if (prev) { prev.setOpen?.(false); prev.video.pause(); clearTimeout(timers.get(prev)); if (!prev.sheet.hidden) { prev.sheet.classList.remove('open'); prev.sheet.hidden = true; } }
+    if (prev) { prev.setOpen?.(false); prev.warming = false; prev.video.pause(); clearTimeout(timers.get(prev)); if (!prev.sheet.hidden) { prev.sheet.classList.remove('open'); prev.sheet.hidden = true; } }
     active = i;
     const node = nodes[i];
+    if (node.warming) { node.warming = false; node.video.playbackRate = 1; if (node.video.currentTime > 0) { try { node.video.currentTime = 0; } catch { /* ignore */ } } }
     playNode(node);
-    const keep = preloadAhead(i);
+    const keep = Math.max(2, pump());
     nodes.forEach((n, k) => { if (Math.abs(k - i) > keep) release(n); });
     loadDetail(node);
     history.replaceState(null, '', `/shorts/${node.v.id}${ctxQuery()}`);
@@ -310,7 +362,7 @@ export default async function shorts({ root, params, query }) {
         try { const r = await api.post(`/api/videos/${node.v.id}/view`); if (r.counted) node.v.metrics.views = r.views; } catch { /* ignore */ }
       }, 3000));
     }
-    if (i >= nodes.length - 3) loadMore();
+    if (i >= nodes.length - 5) loadMore();
   }
 
   async function loadMore() {
@@ -323,6 +375,7 @@ export default async function shorts({ root, params, query }) {
       const seen = new Set(items.map((x) => x.id));
       const fresh = r.items.filter((x) => !seen.has(x.id));
       fresh.forEach((v) => { items.push(v); addNode(v); });
+      schedulePump();
     } catch { /* retry on next scroll */ page--; }
     loadingMore = false;
   }
@@ -362,6 +415,7 @@ export default async function shorts({ root, params, query }) {
   document.addEventListener('keydown', onKey);
   const onVis = () => { const n = nodes[active]; if (!n) return; if (document.hidden) n.video.pause(); };
   document.addEventListener('visibilitychange', onVis);
+  const pumpTick = setInterval(schedulePump, 2000); // safety net: keeps the queue topped up even if no media event fires
 
   // Start on the first item (the requested Short).
   requestAnimationFrame(() => { activate(0); });
@@ -370,6 +424,7 @@ export default async function shorts({ root, params, query }) {
   return {
     destroy() {
       destroyed = true;
+      clearInterval(pumpTick); clearTimeout(pumpTimer);
       io.disconnect();
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('visibilitychange', onVis);
