@@ -11,6 +11,7 @@ import { getStorage } from '../storage/index.js';
 import { uploader, cleanupFiles, extFor } from '../lib/uploads.js';
 import { sniff, hasFfmpeg, makeThumbnail } from '../lib/media.js';
 import { storeThumbnail } from '../services/thumbnails.js';
+import { recommend } from '../services/recommend.js';
 import path from 'node:path';
 import { config } from '../config.js';
 import { publicId, fileId } from '../lib/crypto.js';
@@ -74,6 +75,20 @@ r.get('/videos', wrap(async (req, res) => {
   const p = listQuery.parse(req.query);
   const { rows, hasMore } = await listVideos({ ...p, offset: p.page * p.limit });
   res.json({ items: rows.map((v) => videoDto(v)), has_more: hasMore, page: p.page });
+}));
+
+// "For you": a mix of what the viewer already watches, what is new, and something different.
+r.get('/feed/for-you', wrap(async (req, res) => {
+  const p = z.object({
+    kind: z.enum(['short', 'long']).default('short'),
+    limit: z.coerce.number().int().min(1).max(30).default(10),
+    exclude: z.string().max(4000).optional().default(''),
+  }).parse(req.query);
+  const exclude = p.exclude.split(',').map((x) => x.trim()).filter((x) => /^[A-Za-z0-9_-]{4,40}$/.test(x)).slice(0, 200);
+  const actor = actorFor(req, res);
+  const { rows, hasMore } = await recommend({ actorKey: actor?.key || null, kind: p.kind, limit: p.limit, exclude });
+  res.set('Cache-Control', 'private, no-store').set('Vary', 'Cookie');
+  res.json({ items: rows.map((v) => ({ ...videoDto(v), rec: v.rec })), has_more: hasMore });
 }));
 
 // Home feed: Shorts section, then 4-5 long videos, then more Shorts ... (one pair per page).

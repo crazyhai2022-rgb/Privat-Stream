@@ -147,6 +147,48 @@ proven-abusive engagement is a separate, audited action.
 
 ---
 
+### Creator earnings and payouts
+
+* **Rates** (Admin → Creator payments → Rates & rules): Shorts ₹2 per 1,000 eligible views (₹10 per 5,000) and long
+  videos ₹10 per 1,000 by default. Both are settings; every change is recorded in the rate history, and each earning
+  row keeps the rate it was earned at, so past earnings never change.
+* **Eligible views** are counted once per viewer per `dedupe_hours`, only after the viewer watched
+  `client_view_delay_seconds`, and within the per-viewer and per-network daily limits. Creators' own views, suspicious
+  actors and invalidated videos earn nothing (rows are excluded, never deleted).
+* **Ledger**: a daily job turns view events into earning entries, which become payable after `approval_delay_days`.
+  A creator's balance is always derived from the ledger. Money is stored as `numeric`; INR is canonical.
+* **Payouts**: the 7th of each month (a weekend rolls to Monday), minimum ₹500. A smaller balance is carried forward
+  and is never partly paid. A Super Admin builds the batch, verifies each creator's UPI / BTC / ETH / USDT method,
+  approves payouts, pays outside the platform and records the **transaction reference** (crypto also needs the hash and
+  the matching network). The platform never simulates a transfer, and a payout cannot become *paid* without a reference.
+* **Payment details** are AES-256-GCM encrypted with `PAYOUT_ENCRYPTION_KEY`; creators only ever see a masked label,
+  and an administrator revealing one is written to the audit log.
+* Reconciliation, CSV exports, manual adjustments (with a reason) and payment graphs are in the same admin section.
+
+### Recommendations ("For you")
+
+The home page and the default Shorts feed mix, per 10 videos: ~5 like what the viewer already watches, ~3 new, ~2 from
+outside their usual interests (Admin → Platform settings). The only input is the pseudonymous viewer id already used for
+view counting; nothing new is stored, and a first-time visitor simply gets new and popular videos. Nothing repeats.
+
+### Visitor analytics
+
+Admin → Visitors shows daily visitors (new vs returning, signed in), page views, and the most watched videos. One
+pseudonymous row per visitor per day; no IP address, page path or user agent is kept. Bots, administrators and Do Not
+Track visitors are not counted.
+
+### Thumbnails, Research, Subscribe and SEO
+
+* Thumbnails: pick a frame or upload an image, crop/zoom/preview in the browser; the server re-validates size, type and
+  aspect. Files live in storage, never in the database, and are used on every card, the watch page and share previews.
+* Research (`/research`): paste a video URL to get 1–5 distinct title / description / 5 hashtag / keyword suggestions
+  with copy buttons and **Upload this** (pre-fills the upload form; it never publishes). Fetching is SSRF-safe and honours
+  robots.txt. With `ANTHROPIC_API_KEY` the text is AI-written; without it the page says it is using template mode.
+  No search-volume numbers are ever invented.
+* Subscribe is idempotent; the compact Telegram button follows the global/creator link priority above.
+* Public pages get a unique title, description, canonical URL, Open Graph / Twitter tags and `VideoObject` JSON-LD;
+  `/sitemap.xml` and `/robots.txt` are generated and keep private pages and `/admin` out.
+
 ## 4. Project layout
 
 ```

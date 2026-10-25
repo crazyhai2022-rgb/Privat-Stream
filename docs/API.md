@@ -14,6 +14,10 @@ Pagination uses `?page=0` (zero-based) and returns `has_more`.
 | GET | `/api/categories` | Categories with published counts |
 | GET | `/api/videos` | `kind`, `sort`, `category`, `channel`, `q`, `page`, `limit` |
 | GET | `/api/feed/home` | Alternating Shorts / long-video sections, by page |
+| GET | `/api/feed/for-you` | `kind`, `limit` (≤30), `exclude` (ids already shown). Personalised mix: what the viewer watches / new / exploratory. Pseudonymous, never repeats |
+| POST | `/api/visit` | Page-view ping for visitor analytics (skips bots, admins and Do Not Track) |
+| POST | `/api/channels/:handle/subscribe` (`DELETE` to undo) | Idempotent; returns `subscribers` and `subscribed` |
+| GET | `/robots.txt`, `/sitemap.xml` | Generated; private pages and `/admin` are excluded |
 | GET | `/api/videos/:id` | One video, plus the viewer's own reaction and save state |
 | GET | `/api/videos/:id/related` | Related videos (same kind, same category first) |
 | GET | `/api/videos/:id/comments` | Only called when the comments panel is opened |
@@ -48,6 +52,19 @@ Pagination uses `?page=0` (zero-based) and returns `has_more`.
 | POST | `/api/videos/:id/retry` | Retry failed processing |
 | PATCH/DELETE | `/api/videos/:id` | Edit metadata / remove |
 
+## Creator earnings, payments and tools
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/api/me/earnings`, `/me/earnings/chart`, `/me/earnings/videos` | Balance (pending / payable / carried forward), per-day chart (`range`, `from`, `to`), per-video earnings |
+| GET | `/api/me/payouts` | Payout history with status and reference |
+| GET/POST | `/api/me/payment-methods` | UPI or BTC / ETH / USDT (TRC20 / BEP20 / ERC20). Identifiers are encrypted; only a masked label is returned |
+| POST/DELETE | `/api/me/payment-methods/:id/default` / `:id` | |
+| POST | `/api/videos/:id/thumbnail` | Custom thumbnail (JPEG/PNG/WebP, exact aspect, size-checked) |
+| POST | `/api/videos/:id/thumbnail/frame` | Frame captured in the browser from the video |
+| POST | `/api/me/channel/avatar`, `/me/channel/banner` | Cropped to 400 × 400 and 2560 × 1440 |
+| POST | `/api/research/analyze` | `{ url }` → 1–5 distinct title / description / 5 hashtags / keyword suggestions. SSRF-protected; `mode` is `ai` or `template` |
+
 ## Engagement
 
 | Method | Path | Login | Notes |
@@ -79,3 +96,17 @@ Pagination uses `?page=0` (zero-based) and returns `has_more`.
 
 Destructive actions require `confirm: true` and a `reason`. Every admin action is written to the
 audit log. Permissions are enforced per role on the server, never in the client.
+
+### Creator payments (Super Admin only: `/api/admin/payments`, permission `payments`)
+
+| Area | Endpoints |
+| --- | --- |
+| Overview | `GET /summary` (cards + graph data), `GET /eligibility?filter=eligible\|below\|no_method` |
+| Payment methods | `GET /methods?status=`, `POST /methods/:id/review` (`verify \| reject \| request_changes`), `POST /methods/:id/reveal` (audited) |
+| Batches | `GET /batches`, `POST /batches` (`period_start`), `GET /batches/:id`, `POST /batches/:id/approve`, `POST /batches/:id/cancel` (both need `confirm: true`) |
+| Payouts | `GET /payouts`, `POST /payouts/:id/transition` (`to`: approved, processing, paid, failed, on_hold, cancelled, eligible; paid needs `transaction_ref` or `tx_hash` + `tx_network`) |
+| Adjustments | `GET /adjustments`, `POST /adjustments` (`channel_id`, `amount`, `reason`) |
+| Reports | `GET /reconciliation`, `GET /rates`, `GET /export/payouts.csv`, `GET /export/earnings.csv` |
+
+Rates and payout rules are edited with `PUT /api/admin/settings/monetization`; every rate change is recorded in the rate history.
+Visitor analytics: `GET /api/admin/analytics/visitors?days=` (permission `analytics`). Recommendation mix: setting `recommendations`.

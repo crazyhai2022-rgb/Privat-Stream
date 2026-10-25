@@ -3,6 +3,7 @@ process.env.NODE_ENV = 'test';
 process.env.APP_SECRET ||= 'test-secret-test-secret-test-secret-123456';
 process.env.RATE_LIMIT_DISABLED = '1';
 process.env.TRANSCODE = '0';          // keep tests fast; the probe/thumbnail path still runs
+process.env.RUN_MAINTENANCE = '0';    // tests call maintenance explicitly
 process.env.RUN_WORKER = '0';         // tests drain the queue explicitly
 process.env.EXPOSE_EMAIL_OUTBOX = '1';
 process.env.PGLITE_DIR ||= 'memory://';

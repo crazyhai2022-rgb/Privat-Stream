@@ -6,6 +6,9 @@ import { avatarEl } from '../cards.js';
 import { react, toggleSave, shareVideo, reportDialog, requireLogin, subscribeBar, commentsPanel } from '../engage.js';
 import { SORT_LABELS } from '../listing.js';
 
+const SEEK_SECONDS = 10;     // double-tap / double-click skips this far
+const DOUBLE_TAP_MS = 280;   // how quickly the second tap must follow the first
+
 let muted = true; // starts muted (browser autoplay rules + no surprise audio); stays unmuted once the user chooses
 
 export default async function shorts({ root, params, query }) {
@@ -23,9 +26,18 @@ export default async function shorts({ root, params, query }) {
   const timers = new Map();
 
   // ---------- data ----------
+  // The default feed is "For you" (a mix of what you watch, what is new and something different).
+  // Choosing a sort, category, channel or search switches to that plain list.
+  const forYou = filters.sort === 'trending' && !filters.category && !filters.channel && !filters.q;
+  const shownIds = new Set();
   async function fetchPage(p) {
-    const r = await api.get('/api/videos' + qs({ kind: 'short', ...filters, page: p, limit: 12 }));
-    return r;
+    if (forYou) {
+      const ex = [...shownIds].slice(-150).join(',');
+      const r = await api.get('/api/feed/for-you' + qs({ kind: 'short', limit: 12, exclude: ex }));
+      r.items.forEach((v) => shownIds.add(v.id));
+      return r;
+    }
+    return api.get('/api/videos' + qs({ kind: 'short', ...filters, page: p, limit: 12 }));
   }
   try {
     let first = null;
@@ -33,7 +45,7 @@ export default async function shorts({ root, params, query }) {
       try {
         const d = await api.get(`/api/videos/${params.id}`);
         if (d.video.kind !== 'short') { navigate(`/watch/${params.id}`, { replace: true }); return; }
-        first = d.video;
+        first = d.video; shownIds.add(first.id);
       } catch { toast('That Short is not available', 'bad'); }
     }
     const r = await fetchPage(0);
@@ -67,7 +79,28 @@ export default async function shorts({ root, params, query }) {
     const progress = h('div', { class: 'sv-progress', role: 'slider', 'aria-label': 'Video progress', 'aria-valuemin': 0, 'aria-valuemax': 100, tabindex: '0',
       onclick: (e) => { const r = progress.getBoundingClientRect(); if (video.duration) video.currentTime = ((e.clientX - r.left) / r.width) * video.duration; } }, progressBar);
     const flash = h('div', { class: 'sv-flash' }, icon('pause', 'fill'));
-    const tap = h('div', { class: 'sv-tap', onclick: () => togglePlay(node), 'aria-hidden': 'true' });
+    // One tap/click toggles play; a quick second one on the left or right third seeks 10 seconds
+    // back or forward (and further quick taps keep seeking), like the big video apps.
+    const seekL = h('div', { class: 'sv-seek left', 'aria-hidden': 'true' }, h('span', null, '−10s'));
+    const seekR = h('div', { class: 'sv-seek right', 'aria-hidden': 'true' }, h('span', null, '+10s'));
+    let tapTimer = null, lastTapAt = 0, seeking = false, seekingTimer = null;
+    const zoneOf = (e) => { const r = tap.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width; return x < 0.38 ? -1 : x > 0.62 ? 1 : 0; };
+    const seekBy = (dir) => {
+      if (!(video.duration > 0)) return;
+      video.currentTime = Math.min(Math.max(0, video.currentTime + dir * SEEK_SECONDS), Math.max(0, video.duration - 0.05));
+      const el = dir < 0 ? seekL : seekR;
+      el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+      seeking = true; clearTimeout(seekingTimer); seekingTimer = setTimeout(() => { seeking = false; }, 700);
+    };
+    const tap = h('div', { class: 'sv-tap', 'aria-hidden': 'true', onclick: (e) => {
+      const dir = zoneOf(e);
+      const now = performance.now();
+      if (dir !== 0 && (seeking || (tapTimer && now - lastTapAt < DOUBLE_TAP_MS))) {
+        clearTimeout(tapTimer); tapTimer = null; lastTapAt = now; seekBy(dir); return;
+      }
+      clearTimeout(tapTimer); lastTapAt = now;
+      tapTimer = setTimeout(() => { tapTimer = null; togglePlay(node); }, DOUBLE_TAP_MS);
+    } });
 
     const heart = actBtn('heart', fmtCount(v.metrics.hearts), () => doReact(node, 'heart'), { aria: 'Heart', pressed: true });
     const dis = actBtn('dislike', fmtCount(v.metrics.dislikes), () => doReact(node, 'dislike'), { aria: 'Dislike', pressed: true });
@@ -90,7 +123,7 @@ export default async function shorts({ root, params, query }) {
       h('div', { class: 'row', style: 'gap:8px' }, h('a', { class: 'sv-pill', href: '/', 'aria-label': 'Home' }, icon('home')), sortSel),
       h('div', { class: 'row', style: 'gap:8px' }, muteBtn, moreBtn));
 
-    const stage = h('div', { class: 'sv-stage' }, video, tap, flash, top, info, progress);
+    const stage = h('div', { class: 'sv-stage' }, video, tap, seekL, seekR, flash, top, info, progress);
     const sheet = h('div', { class: 'sv-sheet', hidden: true, role: 'dialog', 'aria-label': 'Comments' });
     stage.append(sheet);
     const el = h('section', { class: 'sv-item', dataset: { id: v.id } }, stage, actions);

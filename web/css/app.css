@@ -479,3 +479,12 @@ body.immersive #view { margin-left: var(--side-w); padding-top: var(--topbar-h);
 .sv-info .who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .sv-info .btn.subscribe { height: 30px; padding: 0 14px; font-size: 13px; }
 .sv-info .chactions { gap: 6px; }
+
+/* Shorts: double-tap seek indicators */
+.sv-seek { position: absolute; top: 0; bottom: 0; width: 38%; z-index: 3; display: grid; place-items: center; pointer-events: none; opacity: 0; }
+.sv-seek.left { left: 0; border-radius: 0 50% 50% 0; background: radial-gradient(closest-side, rgba(255,255,255,.18), transparent); }
+.sv-seek.right { right: 0; border-radius: 50% 0 0 50%; background: radial-gradient(closest-side, rgba(255,255,255,.18), transparent); }
+.sv-seek span { font-weight: 800; font-size: 15px; padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55); }
+.sv-seek.show { animation: seekflash .6s ease-out; }
+@keyframes seekflash { 0% { opacity: 0; } 15% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sv-seek.show { animation: none; opacity: 1; transition: opacity .6s; } }

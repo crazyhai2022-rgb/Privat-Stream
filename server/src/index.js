@@ -4,6 +4,7 @@ import { initDb, db } from './db/index.js';
 import { migrate } from './db/migrate.js';
 import { createApp } from './app.js';
 import { startWorker, stopWorker } from './services/processing.js';
+import { startMaintenance, stopMaintenance } from './services/maintenance.js';
 
 fs.mkdirSync(config.storage.tmpDir, { recursive: true });
 await initDb();
@@ -40,9 +41,11 @@ const server = app.listen(config.port, () => {
   void hasAdmin;
 });
 if (config.worker.inline) startWorker();
+startMaintenance();
 
 const shutdown = async () => {
   stopWorker();
+  stopMaintenance();
   server.close();
   await db.close().catch(() => {});
   process.exit(0);

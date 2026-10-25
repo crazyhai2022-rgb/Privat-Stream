@@ -12,11 +12,20 @@ export default async function home({ root }) {
   root.append(page);
 
   let n = 0, hasMore = true, loading = false, destroyed = false;
+  const shown = { short: new Set(), long: new Set() };
   async function loadMore() {
     if (loading || !hasMore || destroyed) return;
     loading = true;
     try {
-      const r = await api.get(`/api/feed/home?page=${n}`);
+      // "For you": a mix of what you watch, what is new and something different; nothing repeats.
+      const ex = (kind) => [...shown[kind]].slice(-150).join(',');
+      const [sh, lg] = await Promise.all([
+        api.get(`/api/feed/for-you?kind=short&limit=10&exclude=${encodeURIComponent(ex('short'))}`),
+        api.get(`/api/feed/for-you?kind=long&limit=5&exclude=${encodeURIComponent(ex('long'))}`),
+      ]);
+      const r = { shorts: sh.items, long: lg.items, has_more: sh.has_more || lg.has_more };
+      for (const v of r.shorts) shown.short.add(v.id);
+      for (const v of r.long) shown.long.add(v.id);
       if (destroyed) return;
       if (r.shorts.length) {
         feed.append(h('section', { class: 'feed-sec' }, sectionHead(n === 0 ? 'Shorts' : 'More Shorts', '/shorts'), shortsRail(r.shorts, 'sort=trending')));

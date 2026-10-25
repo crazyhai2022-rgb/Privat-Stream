@@ -12,6 +12,7 @@ import { listVideos, videoDto, getVideoRowByPublicId, recountVideo, trendingScor
 import { imageUrl } from '../services/serializers.js';
 import { getStorage } from '../storage/index.js';
 import { recordRateChange } from '../services/earnings.js';
+import { visitorStats } from '../services/visitors.js';
 
 const r = Router();
 
@@ -561,6 +562,11 @@ r.post('/tags/remove', requireAdmin('categories'), wrap(async (req, res) => {
   const out = await db.query(`update videos set tags = array_remove(tags, $1) where $1 = any(tags) returning id`, [tag]);
   await audit(req, 'tag.remove', 'tag', tag, { affected: out.length });
   res.json({ ok: true, affected: out.length });
+}));
+
+// ---------------- Visitor analytics ----------------
+r.get('/analytics/visitors', requireAdmin('analytics'), wrap(async (req, res) => {
+  res.json(await visitorStats(Number(req.query.days) || 30));
 }));
 
 // ---------------- Audit log ----------------

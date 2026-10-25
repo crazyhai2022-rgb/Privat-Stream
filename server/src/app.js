@@ -10,6 +10,7 @@ import videoRoutes from './routes/videos.js';
 import engagementRoutes from './routes/engagement.js';
 import adminRoutes from './routes/admin.js';
 import adminPaymentRoutes from './routes/adminPayments.js';
+import { maybeRunMaintenance } from './services/maintenance.js';
 import earningsRoutes from './routes/earnings.js';
 import researchRoutes from './routes/research.js';
 import { api as publicApi, media } from './routes/public.js';
@@ -55,6 +56,7 @@ export function createApp() {
   app.use('/api', (req, res, next) => { res.setHeader('X-Robots-Tag', 'noindex'); next(); });
   app.use('/api', express.json({ limit: '100kb' }));
   app.use('/api', limiter({ windowMs: 60e3, max: 600 }));
+  app.use('/api', (req, res, next) => { maybeRunMaintenance(); next(); });
   app.use('/api', csrfGuard);
   app.use('/api/auth', authRoutes);
   app.use('/api/admin/payments', adminPaymentRoutes);

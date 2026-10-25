@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { recordVisit } from '../services/visitors.js';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { wrap, badRequest, notFound, forbidden, HttpError } from '../lib/errors.js';
@@ -185,6 +186,14 @@ r.post('/comments/:id/report', requireVerified, limiter({ windowMs: 3600e3, max:
     throw e;
   }
   res.status(201).json({ ok: true });
+}));
+
+// Page-view ping from the app. Counted once per navigation, for visitors only (never administrators).
+r.post('/visit', limiter({ windowMs: 60e3, max: 120 }), wrap(async (req, res) => {
+  if (req.admin || req.get('dnt') === '1') return res.json({ counted: false });
+  const actor = actorFor(req, res, { create: true });
+  const counted = await recordVisit({ key: actor.key, userId: actor.userId, userAgent: req.get('user-agent') });
+  res.json({ counted });
 }));
 
 export default r;

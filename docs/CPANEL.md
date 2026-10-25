@@ -70,6 +70,8 @@ Still in *Setup Node.js App*, add these with the **Add Variable** button:
 | `TRUST_PROXY` | `true` |
 | `RUN_WORKER` | `false` (cron handles processing — step 7) |
 | `STORAGE_LOCAL_DIR` | `/home/USERNAME/viralx-data/media` |
+| `PAYOUT_ENCRYPTION_KEY` | 32+ random characters (**back it up**; it encrypts creators' payment details) |
+| `ANTHROPIC_API_KEY` | *Optional.* Enables AI suggestions on the Research page; without it a labelled template mode is used |
 
 Then, for **Option A** (built-in database):
 
@@ -155,6 +157,13 @@ the same video, so running it every minute is safe.
 > database open. Leave `RUN_WORKER=true` instead so the app processes videos itself, and
 > accept that a video may wait until someone visits the site and wakes the app. Moving to a
 > managed PostgreSQL (step 1, Option B) removes this limitation.
+
+**Earnings upkeep needs no cron.** Building earnings from views, approving them after the review
+window and trimming old analytics runs inside the app, once an hour and also whenever the site gets
+API traffic, so it still happens when the app has been asleep. (With managed PostgreSQL you may instead
+set `RUN_MAINTENANCE=false` and run `node src/scripts/maintenance.js` hourly from cron.)
+It never builds or pays a payout batch: that is always a deliberate action in
+**Admin → Creator payments**.
 
 ## 8. Create your administrator
 

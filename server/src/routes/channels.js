@@ -10,7 +10,7 @@ import { channelDto } from '../services/serializers.js';
 import { normalizeTelegramUrl, resolveTelegram } from '../services/telegram.js';
 import { getStorage } from '../storage/index.js';
 import { uploader, cleanupFiles } from '../lib/uploads.js';
-import { sniff, hasFfmpeg, processImage } from '../lib/media.js';
+import { sniff, hasFfmpeg, processImage, imageSize } from '../lib/media.js';
 import { fileId } from '../lib/crypto.js';
 import { audit } from '../services/audit.js';
 import { meSummary } from './auth.js';
@@ -98,6 +98,9 @@ r.patch('/me/channel', requireAuth, wrap(async (req, res) => {
   res.json(await meSummary(req));
 }));
 
+// Stored sizes: a square avatar and a 16:9 banner whose centre band is the safe area on every device.
+export const IMAGE_SPEC = { avatar: { width: 400, height: 400 }, banner: { width: 2560, height: 1440 } };
+
 async function saveImage(req, kind) {
   const file = req.files?.image?.[0];
   if (!file) throw badRequest('Choose an image file');
@@ -110,9 +113,14 @@ async function saveImage(req, kind) {
     let out = file.path;
     if (await hasFfmpeg()) {
       out = path.join(config.storage.tmpDir, `img-${fileId()}.jpg`);
-      await processImage(src, out, kind === 'avatar' ? { width: 400, height: 400, crop: true } : { width: 1500, height: 500, crop: true });
-    } else if (config.isProd) {
-      throw badRequest('Image processing is unavailable');
+      await processImage(src, out, { ...IMAGE_SPEC[kind], crop: true });
+    } else {
+      // No ffmpeg on this host: the browser's crop editor must already have produced the exact size.
+      const size = await imageSize(file.path);
+      const want = IMAGE_SPEC[kind];
+      if (!size || size.width !== want.width || size.height !== want.height) {
+        throw badRequest(`Use the crop editor: this image must be exactly ${want.width} × ${want.height} px`);
+      }
     }
     await storage.put(key, out, out === file.path ? type.mime : 'image/jpeg');
     if (out !== file.path) await fsp.rm(out, { force: true });

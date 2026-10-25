@@ -88,6 +88,10 @@ export const config = {
     maxAttempts: num(env.WORKER_MAX_ATTEMPTS, 3),
   },
 
+  maintenance: {
+    inline: bool(env.RUN_MAINTENANCE, true),            // earnings upkeep inside the API process
+    everyMinutes: Math.max(5, Number(env.MAINTENANCE_EVERY_MINUTES) || 60),
+  },
   rateLimitDisabled: bool(env.RATE_LIMIT_DISABLED, false),
   // Local-development convenience: serve queued emails (verification and password-reset
   // links) over HTTP. It is OFF unless switched on explicitly, because anyone who can reach

@@ -2,6 +2,7 @@
 import { h, icon, brandWordmark, passwordInput, toast, confirmDialog, openModal, fmtCount, fmtDateTime, timeAgo, statusPill, statusLabel, fmtDur, qs, initials } from '../js/util.js';
 import { api, state, ApiError } from '../js/api.js';
 import { paymentsPage } from './payments.js';
+import { visitorsPage } from './analytics.js';
 
 const app = document.getElementById('app');
 const BRAND = () => state.config?.brand?.name || 'viralX';
@@ -13,6 +14,7 @@ const PAGES = [
   ['videos', 'Video moderation', 'film', 'videos'],
   ['reports', 'Reports', 'flag', 'reports'],
   ['popularity', 'Popularity', 'heart', 'popularity'],
+  ['analytics', 'Visitors', 'eye', 'analytics'],
   ['payments', 'Creator payments', 'tag', 'payments'],
   ['users', 'Users', 'user', 'users'],
   ['categories', 'Categories & tags', 'tag', 'categories'],
@@ -598,6 +600,11 @@ async function settingsPage() {
   const tw = { window_hours: num(t.window_hours, { min: 1, max: 720 }), half_life_hours: num(t.half_life_hours, { min: 1, max: 720 }),
     w_views: num(t.w_views, { min: 0, max: 100, step: 0.5 }), w_hearts: num(t.w_hearts, { min: 0, max: 100, step: 0.5 }), w_shares: num(t.w_shares, { min: 0, max: 100, step: 0.5 }),
     w_comments: num(t.w_comments, { min: 0, max: 100, step: 0.5 }), w_dislikes: num(t.w_dislikes, { min: 0, max: 100, step: 0.5 }), w_engagement: num(t.w_engagement, { min: 0, max: 100, step: 0.5 }) };
+  // Recommendations
+  const rc = s.recommendations;
+  const rec = { preferred: num(rc.preferred, { min: 0, max: 10, step: 1 }), fresh: num(rc.fresh, { min: 0, max: 10, step: 1 }), exploratory: num(rc.exploratory, { min: 0, max: 10, step: 1 }),
+    fresh_days: num(rc.fresh_days, { min: 1, max: 60, step: 1 }), history_days: num(rc.history_days, { min: 1, max: 180, step: 1 }) };
+  const recOn = check(rc.enabled);
   // Ads
   const aReserve = check(s.ads.reserve_space), aLabel = check(s.ads.show_label), aW = num(s.ads.width, { min: 160, max: 400 }), aH = num(s.ads.min_height, { min: 100, max: 1200 });
   const aSlot = input({ value: s.ads.slot_id, placeholder: 'Your ad slot id (optional)' });
@@ -630,6 +637,11 @@ async function settingsPage() {
         field('Weight: views', tw.w_views), field('Weight: hearts', tw.w_hearts), field('Weight: shares', tw.w_shares),
         field('Weight: comments', tw.w_comments), field('Penalty: dislikes', tw.w_dislikes), field('Engagement-rate bonus', tw.w_engagement)),
       saveBtn((b) => save('trending', Object.fromEntries(Object.entries(tw).map(([k, el]) => [k, Number(el.value)])), b))),
+    section('Recommendations (“For you”)', h('p', { class: 'muted small', style: 'margin-bottom:10px' }, 'Slots per 10 videos. Preferred = like what the viewer already watches; New = recently published; Exploratory = outside their usual interests. Based only on a pseudonymous viewer id, never on personal data. Nothing repeats.'),
+      h('label', { class: 'toggle' }, recOn, 'Use the “For you” mix on the home page and Shorts (off = plain trending)'),
+      h('div', { class: 'setting-grid' }, field('Preferred (per 10)', rec.preferred), field('New (per 10)', rec.fresh), field('Exploratory (per 10)', rec.exploratory),
+        field('“New” means published within (days)', rec.fresh_days), field('Watch history used (days)', rec.history_days)),
+      saveBtn((b) => save('recommendations', { enabled: recOn.checked, ...Object.fromEntries(Object.entries(rec).map(([k, el]) => [k, Math.round(Number(el.value))])) }, b))),
     section('Advertisement area', h('p', { class: 'muted small', style: 'margin-bottom:10px' }, 'A reserved empty column on desktop watch pages. It never shows recommended videos and stays empty until you integrate an ad provider.'),
       h('label', { class: 'toggle' }, aReserve, 'Reserve the right-hand ad column on desktop'),
       h('label', { class: 'toggle' }, aLabel, 'Show an “Advertisement” label'),
@@ -660,8 +672,9 @@ async function audit() {
   await load();
 }
 
+async function analytics() { bodyEl.replaceChildren(await visitorsPage()); }
 async function payments(sub, id) { bodyEl.replaceChildren(await paymentsPage(sub, id)); }
-const VIEWS = { dashboard, payments, creators, videos: videosPage, reports, popularity, users, categories: categoriesPage, settings: settingsPage, audit };
+const VIEWS = { dashboard, analytics, payments, creators, videos: videosPage, reports, popularity, users, categories: categoriesPage, settings: settingsPage, audit };
 
 async function render() {
   if (!state.config) { try { state.config = await api.get('/api/config'); } catch { /* optional */ } }

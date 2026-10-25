@@ -1,7 +1,15 @@
 import { h, icon, brandWordmark, $, $$, clear, setTitle } from './util.js';
-import { state, loadConfig, refreshMe, onAuthChange, logout } from './api.js';
+import { state, loadConfig, refreshMe, onAuthChange, logout, api } from './api.js';
 import { route, setHooks, startRouter, navigate } from './router.js';
 import { avatarEl } from './cards.js';
+
+// Page-view ping for the admin's visitor analytics: pseudonymous, skipped when the browser sends Do Not Track.
+let lastTracked = '';
+function trackVisit(path) {
+  if (navigator.doNotTrack === '1' || path === lastTracked) return;
+  lastTracked = path;
+  api.post('/api/visit', {}).catch(() => {});
+}
 
 const page = (file, name = 'default') => async () => {
   const m = await import(`./pages/${file}.js`);
@@ -129,6 +137,7 @@ function buildChrome() {
   onAuthChange(buildChrome);
   setHooks({
     before: (path) => {
+      trackVisit(path);
       document.body.classList.toggle('immersive', path === '/shorts' || path.startsWith('/shorts/'));
       closeDrawer();
       markActive(path);

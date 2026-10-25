@@ -94,11 +94,13 @@ const ORDER = {
   recent: 'v.published_at desc',
   featured: '(v.pinned_rank is null), v.pinned_rank asc, v.featured_at desc nulls last, v.published_at desc',
   trending: '(v.pinned_rank is null), v.pinned_rank asc, s.trending_score desc, v.published_at desc',
+  random: 'random()', // internal: used by recommendations only, never exposed through SORTS
 };
 
 /** Public listing: only published videos from approved, non-suspended channels. */
-export async function listVideos({ kind, sort = 'trending', category, q, channel, limit = 20, offset = 0, excludeIds = [], admin = false, status } = {}) {
-  if (!SORTS.includes(sort)) sort = 'trending';
+export async function listVideos({ kind, sort = 'trending', category, q, channel, limit = 20, offset = 0, excludeIds = [], admin = false, status,
+  affinity = null, notAffinity = null, publishedWithinDays = 0 } = {}) {
+  if (!SORTS.includes(sort) && sort !== 'random') sort = 'trending';
   const params = [];
   const add = (v) => { params.push(v); return `$${params.length}`; };
   const where = [];
@@ -118,6 +120,11 @@ export async function listVideos({ kind, sort = 'trending', category, q, channel
       or cat.name ilike ${like} or exists (select 1 from unnest(v.tags) tg where tg ilike ${like}))`);
   }
   if (excludeIds.length) where.push(`v.public_id <> all(${add(excludeIds)}::text[])`);
+  // Recommendation filters: videos in (or outside) a set of categories / channels, and recency.
+  const aff = (a) => `(coalesce(v.category_id = any(${add(a.categoryIds || [])}::uuid[]), false) or v.channel_id = any(${add(a.channelIds || [])}::uuid[]))`;
+  if (affinity) where.push(aff(affinity));
+  if (notAffinity) where.push(`not ${aff(notAffinity)}`);
+  if (publishedWithinDays > 0) where.push(`coalesce(v.published_at, v.created_at) > now() - make_interval(days => ${add(Math.floor(publishedWithinDays))}::int)`);
 
   let withSql = '';
   let join = '';

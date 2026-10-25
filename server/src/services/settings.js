@@ -51,6 +51,16 @@ export const SETTING_SCHEMAS = {
     max_actors_per_ip_per_day: z.number().int().min(1).max(10000),
     client_view_delay_seconds: z.number().min(0).max(600),
   }),
+  // "For you" mix, per 10 videos: some from what the viewer already watches, some brand new,
+  // and some from outside their usual interests so the feed does not narrow.
+  recommendations: z.object({
+    enabled: z.boolean(),
+    preferred: z.number().int().min(0).max(10),
+    fresh: z.number().int().min(0).max(10),
+    exploratory: z.number().int().min(0).max(10),
+    fresh_days: z.number().int().min(1).max(60),
+    history_days: z.number().int().min(1).max(180),
+  }).refine((r) => r.preferred + r.fresh + r.exploratory > 0, 'At least one slot is needed'),
   currency: z.object({
     display: z.array(z.enum(['INR', 'USD', 'EUR', 'GBP', 'AED'])).min(1),
     usd_per_inr: z.number().min(0).max(10),
@@ -106,6 +116,7 @@ export const DEFAULTS = {
     max_actors_per_ip_per_day: 50,
     client_view_delay_seconds: 3,
   },
+  recommendations: { enabled: true, preferred: 5, fresh: 3, exploratory: 2, fresh_days: 7, history_days: 30 },
   currency: { display: ['INR', 'USD'], usd_per_inr: 0, rates_updated_at: '' },
   ads: { reserve_space: true, show_label: false, width: 300, min_height: 600, slot_id: '' },
   policies: {
