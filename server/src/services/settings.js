@@ -82,7 +82,7 @@ export const DEFAULTS = {
   },
   // Email verification is off by default so the platform works before SMTP exists. Creator
   // approval is the gate that matters: a channel still has to be reviewed before it can upload.
-  moderation: { require_video_moderation: true, require_email_verification: false, comments_enabled: true },
+  moderation: { require_video_moderation: false, require_email_verification: false, comments_enabled: true },
   trending: {
     window_hours: 72,
     half_life_hours: 48,

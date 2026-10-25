@@ -618,7 +618,7 @@ async function settingsPage() {
       saveBtn((b) => save('upload', { short_max_seconds: +uShortSec.value, short_max_mb: +uShortMb.value, long_max_seconds: +uLongSec.value, long_max_mb: +uLongMb.value,
         thumbnail_max_mb: +uThumbMb.value, allowed_formats: fmts.filter((x) => x.i.checked).map((x) => x.f) }, b))),
     section('Moderation',
-      h('label', { class: 'toggle' }, mReview, 'Every new upload must be approved before it is published'),
+      h('label', { class: 'toggle' }, mReview, 'Every new upload must be approved (off by default) before it is published'),
       h('label', { class: 'toggle' }, mVerify, 'Require a verified email address before creating a channel or commenting'),
       h('p', { class: 'muted small', style: 'margin:-4px 0 8px 26px' }, 'Leave this off until SMTP is configured, otherwise nobody can get past sign-up. Creator approval still gates uploading either way.'),
       h('label', { class: 'toggle' }, mComments, 'Comments enabled platform-wide'),

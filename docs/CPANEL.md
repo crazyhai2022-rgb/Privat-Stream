@@ -197,7 +197,7 @@ In the admin panel, **Platform settings → Moderation**:
 - **Require a verified email address** — off by default, which is what you want until SMTP
   works. Anyone can sign up and create a channel; it still lands in *Pending Review*, and only
   your approval lets them upload. Turn this on once email is sending.
-- **Every new upload must be approved** — leave on so nothing goes live unseen.
+- **Every new upload must be approved** — optional; off by default, approved creators publish directly.
 
 New creators appear under **Creator approvals**.
 

@@ -26,8 +26,12 @@ const { hashPassword } = await import('../src/lib/password.js');
 await initDb();
 await migrate({ quiet: true });
 await ensureDefaultCategories();
+// Production default is auto-publish for approved creators; most tests exercise the review queue.
+await db.query(`insert into settings (key, value) values ('moderation', '{"require_video_moderation": true}'::jsonb)
+                on conflict (key) do update set value = settings.value || '{"require_video_moderation": true}'::jsonb`);
 
 const server = createApp().listen(0);
+server.keepAliveTimeout = 120000; // long DB-only tests must not leave the test client with a dead socket
 await new Promise((r) => server.once('listening', r));
 export const base = `http://127.0.0.1:${server.address().port}`;
 process.env.BASE_URL = base;
