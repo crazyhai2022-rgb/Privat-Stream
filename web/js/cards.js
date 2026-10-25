@@ -32,8 +32,9 @@ export function longCard(v) {
       h('span', { onclick: (e) => { e.preventDefault(); e.stopPropagation(); navigate(`/c/${v.channel.handle}`); } }, avatarEl(v.channel, 'md')),
       h('div', { class: 'grow' },
         h('div', { class: 't clamp2' }, v.title),
-        h('div', { class: 'sub' }, `@${v.channel.handle}`),
-        h('div', { class: 'sub' }, `${fmtCount(v.metrics.views)} views · ${timeAgo(v.published_at)}`))));
+        h('div', { class: 'sub ch' }, `@${v.channel.handle}`),
+        // On phones the card stays compact (title, channel, views); the upload date is shown on the watch page.
+        h('div', { class: 'sub' }, `${fmtCount(v.metrics.views)} views`, h('span', { class: 'dt' }, ` · ${timeAgo(v.published_at)}`)))));
 }
 
 export function shortsRail(items, ctx = '') {

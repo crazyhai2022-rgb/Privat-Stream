@@ -30,7 +30,47 @@ export default async function watch({ root, params }) {
   // Player (never autoplays)
   const video = h('video', { controls: '', playsinline: '', preload: 'metadata', poster: v.thumbnail_url || '', 'aria-label': v.title, controlslist: 'nodownload' });
   if (v.stream_url) video.src = v.stream_url;
-  main.append(h('div', { class: 'player' }, video));
+  const player = h('div', { class: 'player' }, video);
+  main.append(player);
+
+  // Double-click (PC) or double-tap (phone) on the left or right third of the picture seeks 10 seconds
+  // back or forward, like the Shorts viewer. The bottom strip is left to the native controls, and
+  // double-clicking the middle still toggles full screen. J / L on the keyboard seek the same way.
+  const SEEK_SECONDS = 10;
+  const seekL = h('div', { class: 'sv-seek left', 'aria-hidden': 'true' }, h('span', null, '−10s'));
+  const seekR = h('div', { class: 'sv-seek right', 'aria-hidden': 'true' }, h('span', null, '+10s'));
+  player.append(seekL, seekR);
+  const seekBy = (dir) => {
+    if (!(video.duration > 0)) return;
+    video.currentTime = Math.min(Math.max(0, video.currentTime + dir * SEEK_SECONDS), Math.max(0, video.duration - 0.05));
+    const el = dir < 0 ? seekL : seekR;
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  };
+  const zoneOf = (e) => {
+    const r = video.getBoundingClientRect();
+    if (r.bottom - e.clientY < 60) return 0;
+    const x = (e.clientX - r.left) / r.width;
+    return x < 0.33 ? -1 : x > 0.67 ? 1 : 0;
+  };
+  let touchSeekAt = 0, lastTap = { t: 0, dir: 0 };
+  video.addEventListener('dblclick', (e) => {
+    const dir = zoneOf(e);
+    if (!dir) return;
+    e.preventDefault(); e.stopPropagation();
+    if (performance.now() - touchSeekAt > 700) seekBy(dir);
+  }, true);
+  video.addEventListener('pointerup', (e) => {
+    if (e.pointerType !== 'touch') return;
+    const dir = zoneOf(e), now = performance.now();
+    if (dir && dir === lastTap.dir && now - lastTap.t < 320) { lastTap = { t: 0, dir: 0 }; touchSeekAt = now; seekBy(dir); }
+    else lastTap = { t: now, dir };
+  }, true);
+  const onKey = (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || /^(input|textarea|select)$/i.test(e.target?.tagName || '') || e.target?.isContentEditable) return;
+    if (e.key === 'j' || e.key === 'J') seekBy(-1);
+    else if (e.key === 'l' || e.key === 'L') seekBy(1);
+  };
+  document.addEventListener('keydown', onKey);
   if (!v.visible_to_public) main.append(h('div', { class: `notice ${v.status === 'published' ? '' : 'warn'}`, style: 'margin-top:10px' }, 'Preview: this video is ', statusPill(v.status), ' and is only visible to you and moderators.'));
 
   let viewed = false;
@@ -114,5 +154,5 @@ export default async function watch({ root, params }) {
     } catch { /* ignore */ }
   })();
 
-  return { destroy() { video.pause(); video.removeAttribute('src'); video.load(); } };
+  return { destroy() { document.removeEventListener('keydown', onKey); video.pause(); video.removeAttribute('src'); video.load(); } };
 }
