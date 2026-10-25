@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { wrap, HttpError } from '../lib/errors.js';
 import { requireAuth, limiter } from '../middleware/core.js';
@@ -11,7 +12,7 @@ const r = Router();
 const body = z.object({ url: z.string().max(2000), count: z.number().int().min(1).max(5).default(3) });
 
 // Each analysis makes outbound requests and may call a paid AI service, so it is rate limited per account.
-const perUser = limiter({ windowMs: 60_000, max: 8, message: 'You are analysing too quickly. Wait a minute and try again.', keyGenerator: (req) => `research:${req.user?.id || req.ip}` });
+const perUser = limiter({ windowMs: 60_000, max: 8, message: 'You are analysing too quickly. Wait a minute and try again.', keyGenerator: (req) => `research:${req.user?.id || ipKeyGenerator(req.ip)}` });
 
 r.post('/research/analyze', requireAuth, requireUploader, perUser, wrap(async (req, res) => {
   const { url, count } = body.parse(req.body);
